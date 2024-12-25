@@ -5,22 +5,15 @@ import os
 # Characters for the rain
 CHARACTERS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 AMOUNT_OF_COLUMNS = 20
-MAX_COLUMN_DISTANCE = 15 # amount of rows 30
+MAX_COLUMN_DISTANCE = 60 # amount of rows 30
 
 # Green gradient colors (bright green to dark green)
 COLORS = [
-    "\033[92m",  # Bright green
-    "\033[32m",  # Slightly dimmer green
-    "\033[2;32m",  # Dark green
-    "\033[90m",  # Almost black-green (dim gray)
-    "\033[0m",    # Reset (black/transparent)
-]
-
-COLORS = ["\033[0m",    # Reset (black/transparent)
-          "\033[90m",  # Almost black-green (dim gray)
-          "\033[2;32m",  # Dark green
-          "\033[32m",  # Slightly dimmer green
-          "\033[92m",  # Bright green
+    "\033[38;2;0;34;0m",   # Almost black-green
+    "\033[38;2;0;102;0m",  # Dark green
+    "\033[38;2;0;204;0m",  # Slightly dimmer green
+    "\033[38;2;0;255;0m",  # Bright green
+    "\033[0m"              # Reset color (default terminal color)
 ]
 
 os.system('cls')
@@ -53,6 +46,9 @@ def make_column(is_empty=False):
 def columns_to_rows(columns):
     rows = []
 
+    for column_number in range(len(columns)):
+        columns[column_number]['cur_char'] = 0
+
     for row_number in range(MAX_COLUMN_DISTANCE):
         row = ''
 
@@ -69,9 +65,18 @@ def columns_to_rows(columns):
             #     columns[column_number] = make_column(is_empty=True)
             #     continue
 
-            if 0 < column['max_distance'] - row_number <= len(COLORS) and column['cur_final_char'] >= column['cur_char']:
-                row += column['chars'][column['cur_char']]
+
+
+            if 0 <= column['cur_final_char'] - row_number < len(COLORS): # and row_number <= column['cur_char']:
+                if column['cur_final_char'] < len(column['chars']):
+                    row += column['chars'][len(column['chars']) - 1 - column['cur_final_char'] + column['cur_char']]
+                else:
+                    row += column['chars'][column['cur_char'] - 1]
                 column['cur_char'] += 1
+
+
+            else:
+                row += ' '
 
             # if column['cur_final_char_distance'] - row_number < len(COLORS):
             #     print('too far')
@@ -86,10 +91,8 @@ def columns_to_rows(columns):
 
 columns = []
 
-# columns = [{'chars' : ['b', 'c'], 'cur_char' : 1, 'max_distance' : 14}]
-
 for _ in range(AMOUNT_OF_COLUMNS):
-    if 0.5 > random.random():    # if 0.8 > random.random():
+    if 0.9 > random.random():# if 0.8 > random.random():
         columns.append(make_column(is_empty=True))
     else:
         columns.append(make_column(is_empty=False))
@@ -98,7 +101,7 @@ for _ in range(AMOUNT_OF_COLUMNS):
 a = 0
 while True:
     a += 1
-    if a > 10:
+    if a > 50:
         break
 
 
@@ -108,23 +111,12 @@ while True:
         print(row)
     
     for column_index, column in enumerate(columns):
-        if column['max_distance'] == 0:
-            if 0.2 > random.random():
-                columns[column_index] = make_column(is_empty=False)
-
-            continue
-
-        for char_index in range(len(column['chars'])):
-            if 0.1 > random.random():
-                column['chars'][char_index] = random.choice(CHARACTERS)
-
-        column['cur_char'] = 0
         column['cur_final_char'] += 1
 
-        if column['cur_final_char'] > len(COLORS):
+        if column['cur_final_char'] > column['max_distance']:
             column = make_column(is_empty=True)
 
         columns[column_index] = column
     
-    time.sleep(1)
+    time.sleep(1.5)
     os.system('cls')
