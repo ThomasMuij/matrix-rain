@@ -1,122 +1,81 @@
+
+# základ kódu jsem vytvořil sám, ale drobné chybky, barvu a úpravu kódu jsem udělal pomocí chatgpt
+
+
+
 import random
 import time
 import os
 
-# Characters for the rain
-CHARACTERS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-AMOUNT_OF_COLUMNS = 20
-MAX_COLUMN_DISTANCE = 60 # amount of rows 30
+RESET_COLUMN_CHANCE = 0.03    # Chance for a column to reset when it becomes empty (0 to 1)
+TIME_BETWEEN_FRAMES = 0.05
 
-# Green gradient colors (bright green to dark green)
+# Characters for the rain
+CHARACTERS = "ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍｦｲｸｺｿﾁﾄﾉﾌﾤﾨﾛﾝ012345789:.=*+-<>"
+
+# Number of columns and the maximum distance a character can fall
+AMOUNT_OF_COLUMNS = 160
+MAX_COLUMN_DISTANCE = 20
+
+# Green gradient colors (8 shades, from darkest to brightest)
 COLORS = [
-    "\033[38;2;0;34;0m",   # Almost black-green
-    "\033[38;2;0;102;0m",  # Dark green
-    "\033[38;2;0;204;0m",  # Slightly dimmer green
-    "\033[38;2;0;255;0m",  # Bright green
+    "\033[38;2;0;16;0m",   # Very dark green
+    "\033[38;2;0;48;0m",   # Darker green
+    "\033[38;2;0;80;0m",   # Dark green
+    "\033[38;2;0;112;0m",  # Slightly dark green
+    "\033[38;2;0;144;0m",  # Medium green
+    "\033[38;2;0;176;0m",  # Bright green
+    "\033[38;2;0;208;0m",  # Brighter green
+    "\033[38;2;0;255;0m",  # Brightest green
     "\033[0m"              # Reset color (default terminal color)
 ]
 
-os.system('cls')
+# Clear the terminal screen
+os.system('cls' if os.name == 'nt' else 'clear')
 
-######################################
-def hex_to_rgb(hex_color):
-    """Convert hex color (#RRGGBB) to an (R, G, B) tuple."""
-    return tuple(int(hex_color[i:i+2], 16) for i in (1, 3, 5))
-
-
-######################################
 def make_column(is_empty=False):
-    chars = []
-
+    """Create a column with random characters or an empty one."""
     if is_empty:
-        max_distance = 0
-    else:
-        max_distance = random.randint(len(COLORS), MAX_COLUMN_DISTANCE)
+        return {'chars': [], 'cur_final_char': 0, 'max_distance': 0}
+    max_distance = MAX_COLUMN_DISTANCE
+    chars = [random.choice(CHARACTERS) for _ in range(len(COLORS))]
+    return {'chars': chars, 'cur_final_char': 0, 'max_distance': max_distance}
 
-        for _ in range(len(COLORS)):
-            chars.append(random.choice(CHARACTERS))
-    
-    return {'chars' : chars,
-            'cur_char' : 0,
-            'cur_final_char' : 0,
-            'max_distance' : max_distance}
-
-
-######################################
 def columns_to_rows(columns):
+    """Convert columns into rows for display."""
     rows = []
-
-    for column_number in range(len(columns)):
-        columns[column_number]['cur_char'] = 0
-
     for row_number in range(MAX_COLUMN_DISTANCE):
         row = ''
-
-        for column_number, column in enumerate(columns):
-            if column['max_distance'] == 0:
+        for column in columns:
+            if column['max_distance'] == 0:  # Empty column
                 row += ' '
-                continue
-
-                # if 0.85 < random.random(): do this later in the code
-                #     columns[column_number] = make_column(is_empty=True)
-        
-            
-            # if column['max_distance'] < row_number:
-            #     columns[column_number] = make_column(is_empty=True)
-            #     continue
-
-
-
-            if 0 <= column['cur_final_char'] - row_number < len(COLORS): # and row_number <= column['cur_char']:
-                if column['cur_final_char'] < len(column['chars']):
-                    row += column['chars'][len(column['chars']) - 1 - column['cur_final_char'] + column['cur_char']]
-                else:
-                    row += column['chars'][column['cur_char'] - 1]
-                column['cur_char'] += 1
-
-
+            elif 0 <= column['cur_final_char'] - row_number < len(COLORS):
+                color_index = len(COLORS) - 1 - (column['cur_final_char'] - row_number)
+                color = COLORS[color_index]
+                char = column['chars'][color_index]
+                row += f"{color}{char}\033[0m"
             else:
                 row += ' '
-
-            # if column['cur_final_char_distance'] - row_number < len(COLORS):
-            #     print('too far')
-            #     row += ' '
-            #     continue
-            
-        
         rows.append(row)
-
     return rows
 
+def reset_column_if_needed(column):
+    """Reset a column if it exceeds its maximum distance or if it becomes empty."""
+    column['cur_final_char'] += 1
+    if column['cur_final_char'] > column['max_distance']:
+        return make_column() if random.random() < RESET_COLUMN_CHANCE else column
+    return column
 
-columns = []
+# Initialize columns
+columns = [make_column(is_empty=True) for _ in range(AMOUNT_OF_COLUMNS)]
 
-for _ in range(AMOUNT_OF_COLUMNS):
-    if 0.9 > random.random():# if 0.8 > random.random():
-        columns.append(make_column(is_empty=True))
-    else:
-        columns.append(make_column(is_empty=False))
-
-
-a = 0
+# Main animation loop
 while True:
-    a += 1
-    if a > 50:
-        break
-
-
     rows = columns_to_rows(columns)
 
+    os.system('cls' if os.name == 'nt' else 'clear')  # Clear the terminal
     for row in rows:
         print(row)
-    
-    for column_index, column in enumerate(columns):
-        column['cur_final_char'] += 1
 
-        if column['cur_final_char'] > column['max_distance']:
-            column = make_column(is_empty=True)
-
-        columns[column_index] = column
-    
-    time.sleep(1.5)
-    os.system('cls')
+    columns = [reset_column_if_needed(column) for column in columns]
+    time.sleep(TIME_BETWEEN_FRAMES)
