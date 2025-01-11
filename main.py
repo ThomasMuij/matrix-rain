@@ -15,7 +15,7 @@ CHARACTERS = "ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶ
 
 # Number of columns and the maximum distance a character can fall
 AMOUNT_OF_COLUMNS = 160
-MAX_COLUMN_DISTANCE = 20
+MAX_COLUMN_DISTANCE = 20 # number of rows
 
 # Green gradient colors (8 shades, from darkest to brightest)
 COLORS = [
