@@ -8,14 +8,14 @@ import time
 import os
 
 RESET_COLUMN_CHANCE = 0.03    # Chance for a column to reset when it becomes empty (0 to 1)
-TIME_BETWEEN_FRAMES = 0.05
+TIME_BETWEEN_FRAMES = 0.03
 
 # Characters for the rain
 CHARACTERS = "ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍｦｲｸｺｿﾁﾄﾉﾌﾤﾨﾛﾝ012345789:.=*+-<>"
 
 # Number of columns and the maximum distance a character can fall
-AMOUNT_OF_COLUMNS = 160
-MAX_COLUMN_DISTANCE = 20 # number of rows
+AMOUNT_OF_COLUMNS = 200
+MAX_COLUMN_DISTANCE = 40 # number of rows
 
 # Green gradient colors (8 shades, from darkest to brightest)
 COLORS = [
