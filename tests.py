@@ -1,10 +1,8 @@
-CHARACTERS = "ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍｦｲｸｺｿﾁﾄﾉﾌﾔﾖﾙﾚﾛﾝ012345789:.=*+-<>"
+import os
+import time
+import keyboard
 
-a = ''
-chars = ''
-for char in CHARACTERS:
-    a += 'a '
-    chars += char + ' '
-print(a)
-
-print(chars)
+while True:
+    time.sleep(0.1)
+    if keyboard.is_pressed('shift+up'):
+        print("a")

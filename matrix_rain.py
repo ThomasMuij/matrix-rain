@@ -1,16 +1,9 @@
-
-# rozdíl od druhého matrix rain je to že nejnižší char je náhodný a ostatní se postupně stávají tím novým
-
-# základ kódu jsem vytvořil sám, ale drobné chybky, barvu a úpravu kódu jsem udělal pomocí chatgpt
-
-
-
 import random
 import time
 import os
 import keyboard
 
-NEW_SEQUENCE_CHANCE = 0.02    # Chance for a column to reset when it becomes empty (0 to 1)
+NEW_SEQUENCE_CHANCE = 0.02  # Chance for a column to reset when it becomes empty (0 to 1)
 TIME_BETWEEN_FRAMES = 0.06
 
 AMOUNT_OF_COLUMNS = 150
@@ -18,7 +11,6 @@ AMOUNT_OF_ROWS = 20
 
 MODE = True # changes if the first letter of a sequence is random and others change to it or if the sequence doesn't change
 
-# Characters for the rain
 CHARACTERS = "ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍｦｲｸｺｿﾁﾄﾉﾌﾤﾨﾛﾝ012345789:.=*+-<>"
 
 # Green gradient colors (8 shades, from brightest to darkest)
@@ -110,7 +102,7 @@ def update_column(column):
     return new_column
 
 
-def check_keyboard(count_stop, columns): 
+def check_keyboard(count_stop, columns, extra_lines): 
     """
     Checks for keyboard input and updates relevant variables such as speed, mode, matrix dimensions, colors, and characters.
 
@@ -147,10 +139,10 @@ def check_keyboard(count_stop, columns):
         else:
             MODE = True
     
-    if keyboard.is_pressed('up') and AMOUNT_OF_ROWS > 0:
+    if keyboard.is_pressed('up') and AMOUNT_OF_ROWS > 0 and not keyboard.is_pressed('shift'):
         AMOUNT_OF_ROWS -= 1
 
-    if keyboard.is_pressed('down'):
+    if keyboard.is_pressed('down') and not keyboard.is_pressed('shift'):
         AMOUNT_OF_ROWS += 1
 
     if keyboard.is_pressed('left') and AMOUNT_OF_COLUMNS > 0:
@@ -160,6 +152,12 @@ def check_keyboard(count_stop, columns):
     if keyboard.is_pressed('right'):
         AMOUNT_OF_COLUMNS += 1
         columns.append([])
+
+    if keyboard.is_pressed('shift+up') and extra_lines > 0:
+        extra_lines -= 1
+
+    if keyboard.is_pressed('shift+down'):
+        extra_lines += 1
 
     if keyboard.is_pressed('m'):
         COLORS[0] = "\033[0m" # white = Reset color (default terminal color)
@@ -252,9 +250,6 @@ def check_keyboard(count_stop, columns):
             elif add == 'r':
                 CHARACTERS = chars
             break
-
-    if keyboard.is_pressed('backspace'):
-        return 'stop', columns
     
     if keyboard.is_pressed('h'):
         os.system('cls' if os.name == 'nt' else 'clear')
@@ -269,6 +264,8 @@ def check_keyboard(count_stop, columns):
     arrow down = increase matrix length
     arrow left = reduce number of columns
     arrow right = increase number of columns
+    ctrl + arrow up = shorten extra lines after matrix
+    ctrl + arrow down = increase extra lines after matrix
               
     m = make first character white
     b = change color to blue
@@ -293,12 +290,16 @@ def check_keyboard(count_stop, columns):
     if keyboard.is_pressed('+') or (keyboard.is_pressed('=') and keyboard.is_pressed('shift')):
         NEW_SEQUENCE_CHANCE += NEW_SEQUENCE_CHANCE/20
 
-    return count_stop, columns
+    if keyboard.is_pressed('backspace'):
+        return 'stop', columns, extra_lines
+
+    return count_stop, columns, extra_lines
 
 
 if __name__ == '__main__':
     columns = [[] for _ in range(AMOUNT_OF_COLUMNS)] # Initialize columns
     count_stop = 0 # used for the pause and mode in check_keyboard so that they dont immediately switch
+    extra_lines = 0
 
     # Main animation loop
     while True:
@@ -308,9 +309,11 @@ if __name__ == '__main__':
         os.system('cls' if os.name == 'nt' else 'clear')  # Clear the terminal
         for row in rows:
             print(row)
+
+        print('\n' * extra_lines)
         
         if count_stop != 'stop': # backspace prevents controls so that user can use their keyboard without worrying
-            count_stop, columns = check_keyboard(count_stop, columns)
+            count_stop, columns, extra_lines = check_keyboard(count_stop, columns, extra_lines)
 
         columns = [update_column(column) for column in columns]
         time.sleep(TIME_BETWEEN_FRAMES)
