@@ -3,8 +3,8 @@ import time
 import os
 import keyboard
 
-NEW_SEQUENCE_CHANCE = 0.02  # Chance for a column to reset when it becomes empty (0 to 1)
-TIME_BETWEEN_FRAMES = 0.06
+NEW_SEQUENCE_CHANCE = 0.025  # Chance for a column to reset when it becomes empty (0 to 1)
+TIME_BETWEEN_FRAMES = 0.045
 
 AMOUNT_OF_COLUMNS = 150
 AMOUNT_OF_ROWS = 20
@@ -96,7 +96,7 @@ def update_column(column):
     if len(new_column) > 0: # if the column doesn't have any sequences, it would cause an error trying to find the index [0]
         first_sequence = new_column[0]
 
-        if first_sequence['cur_final_char'] > len(COLORS) and random.random() < NEW_SEQUENCE_CHANCE: # chance for a new sequence to start
+        if first_sequence['cur_final_char'] >= len(COLORS) and random.random() < NEW_SEQUENCE_CHANCE: # chance for a new sequence to start
             new_column.insert(0, make_sequence())
         
     return new_column
@@ -226,11 +226,11 @@ def check_keyboard(count_stop, columns, extra_lines):
 
     if keyboard.is_pressed('7'):
         # os.system('cls' if os.name == 'nt' else 'clear')
-        while True:
-            while True: # chars gets all written things in the terminal even enters before 7 seven is pressed put into as if it was there the entire time
-                check = input('Press enter ')
+        while True: # chars gets all written things in the terminal even enters before 7 seven is pressed put into as if it was there the entire time
+                check = input('Enter 7 and then press enter: ')
                 if '7' in check:
                     break
+        while True:
             chars = input('Characters: ')
             if len(chars.strip()) == 0:
                 print('Need to add at least 1 character')
@@ -287,7 +287,7 @@ def check_keyboard(count_stop, columns, extra_lines):
     if keyboard.is_pressed('-'):
         NEW_SEQUENCE_CHANCE -= NEW_SEQUENCE_CHANCE/8
 
-    if keyboard.is_pressed('+') or (keyboard.is_pressed('=') and keyboard.is_pressed('shift')):
+    if keyboard.is_pressed('+') or (keyboard.is_pressed('=') and keyboard.is_pressed('shift')) and NEW_SEQUENCE_CHANCE <= 1:
         NEW_SEQUENCE_CHANCE += NEW_SEQUENCE_CHANCE/20
 
     if keyboard.is_pressed('backspace'):
