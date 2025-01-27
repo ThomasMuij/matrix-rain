@@ -102,62 +102,78 @@ def update_column(column):
     return new_column
 
 
-def check_keyboard(count_stop, columns, extra_lines): 
+def check_keyboard(count, columns, extra_lines): 
     """
     Checks for keyboard input and updates relevant variables such as speed, mode, matrix dimensions, colors, and characters.
 
     Args:
-        count_stop (int): A counter used to track the frequency of keypress checks.
+        count (int): A counter used to track the frequency of keypress checks.
         columns (list): The current list of columns.
 
     Returns:
-        tuple: The updated count_stop value and the updated columns.
+        tuple: The updated count value and the updated columns.
     """
     # keep in mind that arrows result in numbers also getting pressed: up = 8, right = 6, down = 2, left = 4
     # press h for help
 
     global TIME_BETWEEN_FRAMES, AMOUNT_OF_COLUMNS, AMOUNT_OF_ROWS, COLORS, NEW_SEQUENCE_CHANCE, CHARACTERS, MODE
+    count += 1
+    reset_count = False # so that multiple controls can be used at once (mainly of the same type)
 
     if keyboard.is_pressed('f'):
-        TIME_BETWEEN_FRAMES -= TIME_BETWEEN_FRAMES * 0.05
+        TIME_BETWEEN_FRAMES -= TIME_BETWEEN_FRAMES * 0.0002
 
     if keyboard.is_pressed('s'):
-        TIME_BETWEEN_FRAMES += TIME_BETWEEN_FRAMES * 0.1
+        TIME_BETWEEN_FRAMES += TIME_BETWEEN_FRAMES * 0.0002
 
-    count_stop += 1
-    if keyboard.is_pressed('p') and count_stop > (1/TIME_BETWEEN_FRAMES)/10:
-        time.sleep(0.15)
-        count_stop = 0
+    if keyboard.is_pressed('p') and count > 1000:
+        while keyboard.is_pressed('p'):
+            pass
         while True:
             if keyboard.is_pressed('p'):
+                reset_count = True
                 break
 
-    if keyboard.is_pressed('q') and count_stop > (1/TIME_BETWEEN_FRAMES)/10:
-        count_stop = 0
+    if keyboard.is_pressed('q') and count > 1500:
+        reset_count = True
         if MODE:
             MODE = False
         else:
             MODE = True
     
-    if keyboard.is_pressed('up') and AMOUNT_OF_ROWS > 0 and not keyboard.is_pressed('shift'):
+    if keyboard.is_pressed('up') and AMOUNT_OF_ROWS > 0 and not keyboard.is_pressed('shift') and count > 200:
+        reset_count = True
         AMOUNT_OF_ROWS -= 1
 
-    if keyboard.is_pressed('down') and not keyboard.is_pressed('shift'):
+    if keyboard.is_pressed('down') and not keyboard.is_pressed('shift')  and count > 200:
+        reset_count = True
         AMOUNT_OF_ROWS += 1
 
-    if keyboard.is_pressed('left') and AMOUNT_OF_COLUMNS > 0:
+    if keyboard.is_pressed('left') and AMOUNT_OF_COLUMNS > 0 and count > 150:
+        reset_count = True
         AMOUNT_OF_COLUMNS -= 1
         columns.pop(-1)
 
-    if keyboard.is_pressed('right'):
+    if keyboard.is_pressed('right') and count > 150:
+        reset_count = True
         AMOUNT_OF_COLUMNS += 1
         columns.append([])
 
-    if keyboard.is_pressed('shift+up') and extra_lines > 0:
+    if keyboard.is_pressed('shift+up') and extra_lines > 0  and count > 200:
+        reset_count = True
         extra_lines -= 1
 
-    if keyboard.is_pressed('shift+down'):
+    if keyboard.is_pressed('shift+down') and count > 200:
+        reset_count = True
         extra_lines += 1
+
+    if keyboard.is_pressed('-') and count > 200:
+        reset_count = True
+        NEW_SEQUENCE_CHANCE -= NEW_SEQUENCE_CHANCE/20
+
+    if (keyboard.is_pressed('+') or (keyboard.is_pressed('=') and keyboard.is_pressed('shift')) and NEW_SEQUENCE_CHANCE <= 1) and count > 200:
+        reset_count = True
+        NEW_SEQUENCE_CHANCE += NEW_SEQUENCE_CHANCE/20
 
     if keyboard.is_pressed('m'):
         COLORS[0] = "\033[0m" # white = Reset color (default terminal color)
@@ -201,40 +217,37 @@ def check_keyboard(count_stop, columns, extra_lines):
     if keyboard.is_pressed('1'):
         CHARACTERS = "ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍｦｲｸｺｿﾁﾄﾉﾌﾤﾨﾛﾝ012345789:.=*+-<>"
 
+    # if keyboard.is_pressed('9'):
+    #     time.sleep(0.2)
+    #     CHARACTERS = ''
+    #     while len(CHARACTERS) < 100:
+    #         char = keyboard.read_key()
+    #         if char == 'enter' and len(CHARACTERS.strip()) > 0:
+    #             break
+    #         elif len(char) > 1:
+    #             continue
+    #         elif not (char in CHARACTERS):
+    #             CHARACTERS += char
+
+    # if keyboard.is_pressed('8') and not keyboard.is_pressed('up'):
+    #     time.sleep(0.2)
+    #     while len(CHARACTERS) < 100:
+    #         char = keyboard.read_key()
+    #         if char == 'enter' and len(CHARACTERS.strip()) > 0:
+    #             break
+    #         elif len(char) > 1:
+    #             continue
+    #         elif not (char in CHARACTERS):
+    #             CHARACTERS += char
+
     if keyboard.is_pressed('9'):
-        time.sleep(0.2)
-        CHARACTERS = ''
-        while len(CHARACTERS) < 100:
-            char = keyboard.read_key()
-            if char == 'enter' and len(CHARACTERS.strip()) > 0:
-                break
-            elif len(char) > 1:
-                continue
-            elif not (char in CHARACTERS):
-                CHARACTERS += char
-
-    if keyboard.is_pressed('8') and not keyboard.is_pressed('up'):
-        time.sleep(0.2)
-        while len(CHARACTERS) < 100:
-            char = keyboard.read_key()
-            if char == 'enter' and len(CHARACTERS.strip()) > 0:
-                break
-            elif len(char) > 1:
-                continue
-            elif not (char in CHARACTERS):
-                CHARACTERS += char
-
-    if keyboard.is_pressed('7'):
         # os.system('cls' if os.name == 'nt' else 'clear')
         while True: # chars gets all written things in the terminal even enters before 7 seven is pressed put into as if it was there the entire time
-                check = input('Enter 7 and then press enter: ')
-                if '7' in check:
+                check = input('Enter "9" and then press enter: ')
+                if '9' in check:
                     break
         while True:
             chars = input('Characters: ')
-            if len(chars.strip()) == 0:
-                print('Need to add at least 1 character')
-                continue
             if len(chars) > 100:
                 print("Too many characters")
                 continue
@@ -248,24 +261,44 @@ def check_keyboard(count_stop, columns, extra_lines):
                     continue
                 CHARACTERS += chars
             elif add == 'r':
+                if len(chars) == 0:
+                    chars = ' '
                 CHARACTERS = chars
             break
-    
+
+    if keyboard.is_pressed('v'):
+        print(f'''
+NEW_SEQUENCE_CHANCE = {round(NEW_SEQUENCE_CHANCE, 4)} (Chance for a column to reset when it becomes empty (0 to 1))
+TIME_BETWEEN_FRAMES = {round(TIME_BETWEEN_FRAMES, 4)} (how fast the the characters fall)
+
+AMOUNT_OF_COLUMNS = {AMOUNT_OF_COLUMNS}
+AMOUNT_OF_ROWS = {AMOUNT_OF_ROWS}
+
+MODE = {MODE} (changes if the first letter of a sequence is random and others change to it or if the sequence doesn't change)
+
+CHARACTERS = {CHARACTERS}
+
+COLORS = {COLORS}
+''')
+        input('Press enter to continue...')
+
     if keyboard.is_pressed('h'):
-        os.system('cls' if os.name == 'nt' else 'clear')
+        # os.system('cls' if os.name == 'nt' else 'clear')
         print('''Controls:
-    f = speed up
-    s = slow down
+    f = speed up (relative to current speed)
+    s = slow down (relative to current speed)
     p = (un)pause
     q = changes if the first letter of a sequence is random and others change to it or if the sequence doesn't change
-    backspace = remove controls
               
     arrow up = shorten matrix length
     arrow down = increase matrix length
     arrow left = reduce number of columns
     arrow right = increase number of columns
-    ctrl + arrow up = shorten extra lines after matrix
-    ctrl + arrow down = increase extra lines after matrix
+    ctrl+arrow up = shorten extra lines after matrix (prevents flickering if it exceeds terminal length)
+    ctrl+arrow down = increase extra lines after matrix (prevents flickering if it exceeds terminal length)
+              
+    plus("+") = increase the chance of a new sequence to start falling (relative to current chance)
+    minus("-", "/" for english keyboard) = decreases the chance of a new sequence to start falling (relative to current chance)
               
     m = make first character white
     b = change color to blue
@@ -274,46 +307,49 @@ def check_keyboard(count_stop, columns, extra_lines):
               
     0 = change characters to "01"
     1 = change characters to original
-    9 = change characters to what you press until you press "enter"
-    8 = add characters you press to the current characters until you press "enter"
-    7 = let's you input the characters you want to add or replace
-    
-    press enter to continue''')
-        while True:
-            if keyboard.is_pressed('enter'):
-                break
-
-        
-    if keyboard.is_pressed('-'):
-        NEW_SEQUENCE_CHANCE -= NEW_SEQUENCE_CHANCE/8
-
-    if keyboard.is_pressed('+') or (keyboard.is_pressed('=') and keyboard.is_pressed('shift')) and NEW_SEQUENCE_CHANCE <= 1:
-        NEW_SEQUENCE_CHANCE += NEW_SEQUENCE_CHANCE/20
+    9 = let's you input the characters you want to add or replace
+              
+    v = current values
+    backspace = remove controls
+    ctrl+shift+enter = bring controls back
+              
+    ctrl+c = stop matrix rain
+''')
+        input('Press enter to continue...')
 
     if keyboard.is_pressed('backspace'):
         return 'stop', columns, extra_lines
+    
+    if reset_count:
+        count = 0
 
-    return count_stop, columns, extra_lines
+    return count, columns, extra_lines
 
 
 if __name__ == '__main__':
     columns = [[] for _ in range(AMOUNT_OF_COLUMNS)] # Initialize columns
-    count_stop = 0 # used for the pause and mode in check_keyboard so that they dont immediately switch
+    count = 0 # prevents some controls from doing things too fast
     extra_lines = 0
 
     # Main animation loop
-    while True:
+    try:
+        while True:
+            rows = columns_to_rows(columns)
+            
+            os.system('cls' if os.name == 'nt' else 'clear')  # Clear the terminal
+            for row in rows:
+                print(row)
 
-        rows = columns_to_rows(columns)
-        
-        os.system('cls' if os.name == 'nt' else 'clear')  # Clear the terminal
-        for row in rows:
-            print(row)
+            print('\n' * extra_lines)
 
-        print('\n' * extra_lines)
-        
-        if count_stop != 'stop': # backspace prevents controls so that user can use their keyboard without worrying
-            count_stop, columns, extra_lines = check_keyboard(count_stop, columns, extra_lines)
+            columns = [update_column(column) for column in columns]
 
-        columns = [update_column(column) for column in columns]
-        time.sleep(TIME_BETWEEN_FRAMES)
+            start_time = time.time()
+            while time.time() - start_time < TIME_BETWEEN_FRAMES:
+                if count != 'stop': # backspace prevents controls so that user can use their keyboard without worrying
+                    count, columns, extra_lines = check_keyboard(count, columns, extra_lines)
+                else:
+                    if keyboard.is_pressed('enter') and keyboard.is_pressed('shift') and keyboard.is_pressed('ctrl'):
+                        count = 0
+    except KeyboardInterrupt:
+        print('Matrix rain stopped')
