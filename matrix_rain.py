@@ -6,6 +6,7 @@ import keyboard
 NEW_SEQUENCE_CHANCE = 0.025  # Chance for a column to reset when it becomes empty (0 to 1)
 TIME_BETWEEN_FRAMES = 0.045
 
+
 AMOUNT_OF_COLUMNS = 150
 AMOUNT_OF_ROWS = 20
 
@@ -344,7 +345,15 @@ if __name__ == '__main__':
 
             columns = [update_column(column) for column in columns]
 
-            start_time = time.time()
+            # having it once outside of the time check ensures it gets called even when TIME_BETWEEN_FRAMES is really low
+            # however the count will still cause it to act slower than usual
+            if count != 'stop': # backspace prevents controls so that user can use their keyboard without worrying
+                count, columns, extra_lines = check_keyboard(count, columns, extra_lines)
+            else:
+                if keyboard.is_pressed('enter') and keyboard.is_pressed('shift') and keyboard.is_pressed('ctrl'):
+                    count = 0
+
+            start_time = time.time() # using delay would cause the controls to act differently when TIME_BETWEEN_FRAMES changes
             while time.time() - start_time < TIME_BETWEEN_FRAMES:
                 if count != 'stop': # backspace prevents controls so that user can use their keyboard without worrying
                     count, columns, extra_lines = check_keyboard(count, columns, extra_lines)
