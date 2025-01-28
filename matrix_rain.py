@@ -352,4 +352,7 @@ if __name__ == '__main__':
                     if keyboard.is_pressed('enter') and keyboard.is_pressed('shift') and keyboard.is_pressed('ctrl'):
                         count = 0
     except KeyboardInterrupt:
+        # os.system('cls' if os.name == 'nt' else 'clear')
+        # for row in rows:
+        #     print(row)
         print('Matrix rain stopped')
