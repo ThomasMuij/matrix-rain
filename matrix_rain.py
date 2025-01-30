@@ -42,7 +42,7 @@ MORE_COLUMNS = 'right'
 
 # if removing ctrl or changing to something else than an arrow, upade the HELP_MESSAGE:
 LESS_EXTRA_LINES = 'ctrl+up' 
-MORE_EXTRA_LINES = 'ctrls+down'
+MORE_EXTRA_LINES = 'ctrl+down'
 
 # if changing update HELP_MESSAGE and if keyboard...:
 MORE_NEW_SEQUENCE_CHANCE = '+'
