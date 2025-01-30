@@ -4,7 +4,7 @@ import os
 import keyboard
 
 NEW_SEQUENCE_CHANCE = 0.025  # Chance for a column to reset when it becomes empty (0 to 1)
-RANDOM_CHAR_CHANGE_CHANCE = 0.1
+RANDOM_CHAR_CHANGE_CHANCE = 0
 TIME_BETWEEN_FRAMES = 0.045
 
 AMOUNT_OF_COLUMNS = 150
@@ -34,6 +34,8 @@ SLOW_DOWN = 's'
 PAUSE = 'p'
 MODE_CHAR = 'q'
 
+MORE_RANDOM_CHAR = 'y'
+LESS_RANDOM_CHAR = 'n'
 # if changing to something else than an arrow, upade the HELP_MESSAGE:
 SHORTEN_LENGTH ='up'
 INCREASE_LENGTH = 'down'
@@ -69,6 +71,9 @@ HELP_MESSAGE = f'''Controls:
     {SLOW_DOWN} = slow down (relative to current speed)
     {PAUSE} = (un)pause
     {MODE_CHAR} = changes if the first letter of a sequence is random and others change to it or if the sequence doesn't change
+
+    {MORE_RANDOM_CHAR} = increase chance for characters to randomly change in a sequence
+    {LESS_RANDOM_CHAR} = decrease chance for characters to randomly change in a sequence
               
     arrow {SHORTEN_LENGTH} = shorten matrix length
     arrow {INCREASE_LENGTH} = increase matrix length
@@ -162,7 +167,7 @@ def update_column(column):
             sequence['chars'].pop(-1)
             sequence['chars'].insert(0, random.choice(CHARACTERS))
 
-        if RANDOM_CHAR_CHANGE_CHANCE: # RANDOM:
+        if RANDOM_CHAR_CHANGE_CHANCE: # if isn't necessary
             for char_index, char in enumerate(sequence['chars'].copy()):
                 sequence['chars'][char_index] = random.choice(CHARACTERS) if random.random() < RANDOM_CHAR_CHANGE_CHANCE else char
 
@@ -195,7 +200,7 @@ def check_keyboard(count, columns, extra_lines):
     # keep in mind that arrows result in numbers also getting pressed: up = 8, right = 6, down = 2, left = 4
     # press h for help
 
-    global TIME_BETWEEN_FRAMES, AMOUNT_OF_COLUMNS, AMOUNT_OF_ROWS, COLORS, NEW_SEQUENCE_CHANCE, CHARACTERS, MODE
+    global TIME_BETWEEN_FRAMES, AMOUNT_OF_COLUMNS, AMOUNT_OF_ROWS, COLORS, NEW_SEQUENCE_CHANCE, CHARACTERS, MODE, RANDOM_CHAR_CHANGE_CHANCE
     cur_time = time.time()
     time_passed = [cur_time - i for i in count]
 
@@ -249,9 +254,21 @@ def check_keyboard(count, columns, extra_lines):
         count[10] = cur_time
         NEW_SEQUENCE_CHANCE -= NEW_SEQUENCE_CHANCE/20
 
-    if (keyboard.is_pressed(MORE_NEW_SEQUENCE_CHANCE) or (keyboard.is_pressed('=') and keyboard.is_pressed('shift')) and NEW_SEQUENCE_CHANCE <= 1) and time_passed[11] > 0.1:
+    if (keyboard.is_pressed(MORE_NEW_SEQUENCE_CHANCE) or keyboard.is_pressed('=+shift') and NEW_SEQUENCE_CHANCE <= 1) and time_passed[11] > 0.1:
         count[11] = cur_time
         NEW_SEQUENCE_CHANCE += NEW_SEQUENCE_CHANCE/20
+
+    if keyboard.is_pressed(LESS_RANDOM_CHAR) and time_passed[12] > 0.15:
+        count[12] = cur_time
+        RANDOM_CHAR_CHANGE_CHANCE -= RANDOM_CHAR_CHANGE_CHANCE/20
+        if RANDOM_CHAR_CHANGE_CHANCE < 0.01:
+            RANDOM_CHAR_CHANGE_CHANCE = 0
+
+    if keyboard.is_pressed(MORE_RANDOM_CHAR) and RANDOM_CHAR_CHANGE_CHANCE <= 1 and time_passed[13] > 0.15:
+        count[13] = cur_time
+        if RANDOM_CHAR_CHANGE_CHANCE == 0:
+            RANDOM_CHAR_CHANGE_CHANCE = 0.01
+        RANDOM_CHAR_CHANGE_CHANCE += RANDOM_CHAR_CHANGE_CHANCE/20
 
     if keyboard.is_pressed(FIRST_WHITE):
         COLORS[0] = "\033[0m" # white = Reset color (default terminal color)
@@ -347,6 +364,7 @@ def check_keyboard(count, columns, extra_lines):
     if keyboard.is_pressed(CUR_VALUES):
         print(f'''
 NEW_SEQUENCE_CHANCE = {round(NEW_SEQUENCE_CHANCE, 4)} (Chance for a column to reset when it becomes empty (0 to 1))
+RANDOM_CHAR_CHANGE_CHANCE = {round(RANDOM_CHAR_CHANGE_CHANCE, 4)} (chance for chars to change in the middle of the sequence)
 TIME_BETWEEN_FRAMES = {round(TIME_BETWEEN_FRAMES, 4)} (how fast the the characters fall)
 
 AMOUNT_OF_COLUMNS = {AMOUNT_OF_COLUMNS}
@@ -374,7 +392,7 @@ COLORS = {COLORS}
 ##############################################################
 def run_matrix():
     columns = [[] for _ in range(AMOUNT_OF_COLUMNS)] # Initialize columns
-    count = [time.time() for _ in range(12)] # prevents some controls from doing things too fast
+    count = [time.time() for _ in range(14)] # prevents some controls from doing things too fast
     extra_lines = 0
 
     # Main animation loop
@@ -395,7 +413,7 @@ def run_matrix():
                 if count != 'stop': # backspace prevents controls so that user can use their keyboard without worrying
                     count, columns, extra_lines = check_keyboard(count, columns, extra_lines)
                 elif keyboard.is_pressed(RETURN_CONTROLS):
-                    count = [time.time() for _ in range(12)]
+                    count = [time.time() for _ in range(14)]
 
                 if time.time() - start_time > TIME_BETWEEN_FRAMES:
                     break
