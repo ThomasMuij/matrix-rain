@@ -118,62 +118,62 @@ def check_keyboard(count, columns, extra_lines):
     # press h for help
 
     global TIME_BETWEEN_FRAMES, AMOUNT_OF_COLUMNS, AMOUNT_OF_ROWS, COLORS, NEW_SEQUENCE_CHANCE, CHARACTERS, MODE
-    count += 1
     reset_count = False # so that multiple controls can be used at once (mainly of the same type)
+    cur_time = time.time()
+    time_passed = [cur_time - i for i in count]
 
-    if keyboard.is_pressed('f'):
-        TIME_BETWEEN_FRAMES -= TIME_BETWEEN_FRAMES * 0.0002
+    if keyboard.is_pressed('f') and time_passed[0] > 0.1:
+        count[0] = cur_time
+        TIME_BETWEEN_FRAMES -= TIME_BETWEEN_FRAMES * 0.04
 
-    if keyboard.is_pressed('s'):
-        TIME_BETWEEN_FRAMES += TIME_BETWEEN_FRAMES * 0.0002
+    if keyboard.is_pressed('s') and time_passed[1] > 0.1:
+        count[1] = cur_time
+        TIME_BETWEEN_FRAMES += TIME_BETWEEN_FRAMES * 0.04
 
-    if keyboard.is_pressed('p') and count > 1000:
-        while keyboard.is_pressed('p'):
-            pass
+    if keyboard.is_pressed('p') and time_passed[2] > 0.25:
+        time.sleep(0.25)
         while True:
             if keyboard.is_pressed('p'):
-                reset_count = True
+                count[2] = time.time()
                 break
 
-    if keyboard.is_pressed('q') and count > 1500:
-        reset_count = True
-        if MODE:
-            MODE = False
-        else:
-            MODE = True
+    if keyboard.is_pressed('q') and time_passed[3] > 0.3:
+        count[3] = cur_time
+        MODE = not MODE
     
-    if keyboard.is_pressed('up') and AMOUNT_OF_ROWS > 0 and not keyboard.is_pressed('shift') and count > 200:
-        reset_count = True
+    if keyboard.is_pressed('up') and AMOUNT_OF_ROWS > 0 and not keyboard.is_pressed('shift') and time_passed[4] > 0.09:
+        count[4] = cur_time
         AMOUNT_OF_ROWS -= 1
 
-    if keyboard.is_pressed('down') and not keyboard.is_pressed('shift')  and count > 200:
-        reset_count = True
+    if keyboard.is_pressed('down') and not keyboard.is_pressed('shift') and AMOUNT_OF_ROWS < 70 and time_passed[5] > 0.09:
+        count[5] = cur_time
         AMOUNT_OF_ROWS += 1
 
-    if keyboard.is_pressed('left') and AMOUNT_OF_COLUMNS > 0 and count > 150:
-        reset_count = True
-        AMOUNT_OF_COLUMNS -= 1
-        columns.pop(-1)
-
-    if keyboard.is_pressed('right') and count > 150:
-        reset_count = True
-        AMOUNT_OF_COLUMNS += 1
-        columns.append([])
-
-    if keyboard.is_pressed('shift+up') and extra_lines > 0  and count > 200:
-        reset_count = True
+    if keyboard.is_pressed('shift+up') and extra_lines > 0 and time_passed[6] > 0.09:
+        count[6] = cur_time
         extra_lines -= 1
 
-    if keyboard.is_pressed('shift+down') and count > 200:
+    if keyboard.is_pressed('shift+down') and extra_lines < 30 and time_passed[7] > 0.09:
+        count[7] = cur_time
         reset_count = True
         extra_lines += 1
 
-    if keyboard.is_pressed('-') and count > 200:
-        reset_count = True
+    if keyboard.is_pressed('left') and AMOUNT_OF_COLUMNS > 0 and time_passed[8] > 0.05:
+        count[8] = cur_time
+        AMOUNT_OF_COLUMNS -= 1
+        columns.pop(-1)
+
+    if keyboard.is_pressed('right') and AMOUNT_OF_COLUMNS < 200 and time_passed[9] > 0.05:
+        count[9] = cur_time
+        AMOUNT_OF_COLUMNS += 1
+        columns.append([])
+
+    if keyboard.is_pressed('-') and time_passed[10] > 0.1:
+        count[10] = cur_time
         NEW_SEQUENCE_CHANCE -= NEW_SEQUENCE_CHANCE/20
 
-    if (keyboard.is_pressed('+') or (keyboard.is_pressed('=') and keyboard.is_pressed('shift')) and NEW_SEQUENCE_CHANCE <= 1) and count > 200:
-        reset_count = True
+    if (keyboard.is_pressed('+') or (keyboard.is_pressed('=') and keyboard.is_pressed('shift')) and NEW_SEQUENCE_CHANCE <= 1) and time_passed[11] > 0.1:
+        count[11] = cur_time
         NEW_SEQUENCE_CHANCE += NEW_SEQUENCE_CHANCE/20
 
     if keyboard.is_pressed('m'):
@@ -320,21 +320,19 @@ COLORS = {COLORS}
 
     if keyboard.is_pressed('backspace'):
         return 'stop', columns, extra_lines
-    
-    if reset_count:
-        count = 0
 
     return count, columns, extra_lines
 
 
 if __name__ == '__main__':
     columns = [[] for _ in range(AMOUNT_OF_COLUMNS)] # Initialize columns
-    count = 0 # prevents some controls from doing things too fast
+    count = [time.time() for _ in range(12)] # prevents some controls from doing things too fast
     extra_lines = 0
 
     # Main animation loop
     try:
         while True:
+            start_time = time.time() # using delay would cause the controls to act differently when TIME_BETWEEN_FRAMES changes
             rows = columns_to_rows(columns)
             
             os.system('cls' if os.name == 'nt' else 'clear')  # Clear the terminal
@@ -345,21 +343,15 @@ if __name__ == '__main__':
 
             columns = [update_column(column) for column in columns]
 
-            # having it once outside of the time check ensures it gets called even when TIME_BETWEEN_FRAMES is really low
-            # however the count will still cause it to act slower than usual
-            if count != 'stop': # backspace prevents controls so that user can use their keyboard without worrying
-                count, columns, extra_lines = check_keyboard(count, columns, extra_lines)
-            else:
-                if keyboard.is_pressed('enter') and keyboard.is_pressed('shift') and keyboard.is_pressed('ctrl'):
-                    count = 0
-
-            start_time = time.time() # using delay would cause the controls to act differently when TIME_BETWEEN_FRAMES changes
-            while time.time() - start_time < TIME_BETWEEN_FRAMES:
+            while True: # while time.time() - start_time < TIME_BETWEEN_FRAMES could cause the controls to not be called at all
                 if count != 'stop': # backspace prevents controls so that user can use their keyboard without worrying
                     count, columns, extra_lines = check_keyboard(count, columns, extra_lines)
-                else:
-                    if keyboard.is_pressed('enter') and keyboard.is_pressed('shift') and keyboard.is_pressed('ctrl'):
-                        count = 0
+                elif keyboard.is_pressed('enter') and keyboard.is_pressed('shift') and keyboard.is_pressed('ctrl'):
+                    count = [time.time() for _ in range(12)]
+
+                if time.time() - start_time > TIME_BETWEEN_FRAMES:
+                    break
+
     except KeyboardInterrupt:
         # os.system('cls' if os.name == 'nt' else 'clear')
         # for row in rows:
