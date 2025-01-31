@@ -4,47 +4,46 @@ import os
 import keyboard
 import sys
 
-NEW_SEQUENCE_CHANCE = 0.025  # Chance for a column to reset when it becomes empty (0 to 1)
+NEW_SEQUENCE_CHANCE = 0.025
 RANDOM_CHAR_CHANGE_CHANCE = 0
 TIME_BETWEEN_FRAMES = 0.045
 
 AMOUNT_OF_COLUMNS = 150
 AMOUNT_OF_ROWS = 20
 
-MODE = True # changes if the first letter of a sequence is random and others change to it or if the sequence doesn't change
+MODE = True  # If True, the first letter of a sequence is random and the rest follow; otherwise the sequence remains unchanged.
 
 CHARACTERS = "ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍｦｲｸｺｿﾁﾄﾉﾌﾤﾨﾛﾝ012345789:.=*+-<>"
 
 # Green gradient colors (8 shades, from brightest to darkest)
-COLORS = ["\033[0m",             # white = Reset color (default terminal color)
-          "\033[38;2;0;255;0m",  # Brightest green
-          "\033[38;2;0;208;0m",  # Brighter green
-          "\033[38;2;0;176;0m",  # Bright green
-          "\033[38;2;0;144;0m",  # Medium green
-          "\033[38;2;0;112;0m",  # Slightly dark green
-          "\033[38;2;0;80;0m",   # Dark green
-          "\033[38;2;0;48;0m",   # Darker green
-          "\033[38;2;0;16;0m",   # Very dark green
+COLORS = [
+    "\033[0m",              # White: Reset color (default terminal color)
+    "\033[38;2;0;255;0m",   # Brightest green
+    "\033[38;2;0;208;0m",   # Brighter green
+    "\033[38;2;0;176;0m",   # Bright green
+    "\033[38;2;0;144;0m",   # Medium green
+    "\033[38;2;0;112;0m",   # Slightly dark green
+    "\033[38;2;0;80;0m",    # Dark green
+    "\033[38;2;0;48;0m",    # Darker green
+    "\033[38;2;0;16;0m",    # Very dark green
 ]
 
-
-# controls info:
-# when chaning something, make sure it works with the keyboard module
+# Control key assignments:
 SPEED_UP = 'f'
 SLOW_DOWN = 's'
+
 PAUSE = 'p'
 MODE_CHAR = 'q'
 
 MORE_RANDOM_CHAR = 'shift+up'
-LESS_RANDOM_CHAR = 'shift+up'
+LESS_RANDOM_CHAR = 'shift+down'
 
-# if changing to something else than an arrow, upade the HELP_MESSAGE:
-SHORTEN_LENGTH ='up'
+SHORTEN_LENGTH = 'up'
 INCREASE_LENGTH = 'down'
+
 LESS_COLUMNS = 'left'
 MORE_COLUMNS = 'right'
 
-# if changing update HELP_MESSAGE and if keyboard...:
 MORE_NEW_SEQUENCE_CHANCE = '+'
 LESS_NEW_SEQUENCE_CHANCE = '-'
 
@@ -59,27 +58,28 @@ CHARS_ANY = '9'
 
 SHOW_HELP_MESSAGE = 'h'
 CUR_VALUES = 'v'
+
 REMOVE_CONTROLS = 'backspace'
 RETURN_CONTROLS = 'ctrl+shift+enter'
 
-# ctrl+c = stop matrix rain
-
 HELP_MESSAGE = f'''Controls:
+    up --> arrow up,...
+    
     {SPEED_UP} = speed up (relative to current speed)
     {SLOW_DOWN} = slow down (relative to current speed)
     {PAUSE} = (un)pause
-    {MODE_CHAR} = changes if the first letter of a sequence is random and others change to it or if the sequence doesn't change
+    {MODE_CHAR} = toggles if the first letter of a sequence is random and the rest follow or if the sequence remains unchanged
 
-    {MORE_RANDOM_CHAR} = increase chance for characters to randomly change in a sequence
-    {LESS_RANDOM_CHAR} = decrease chance for characters to randomly change in a sequence
+    {MORE_RANDOM_CHAR} = increase chance for characters to change mid-sequence
+    {LESS_RANDOM_CHAR} = decrease chance for characters to change mid-sequence
               
-    arrow {SHORTEN_LENGTH} = shorten matrix length
-    arrow {INCREASE_LENGTH} = increase matrix length
-    arrow {LESS_COLUMNS} = reduce number of columns
-    arrow {MORE_COLUMNS} = increase number of columns
+    {SHORTEN_LENGTH} = shorten matrix length (rows)
+    {INCREASE_LENGTH} = increase matrix length (rows)
+    {LESS_COLUMNS} = reduce number of columns
+    {MORE_COLUMNS} = increase number of columns
               
-    plus("+") = increase the chance of a new sequence to start falling (relative to current chance)
-    minus("-", "/" for english keyboard) = decreases the chance of a new sequence to start falling (relative to current chance)
+    plus("{MORE_NEW_SEQUENCE_CHANCE}") = increase the chance of a new sequence starting (relative chance)
+    minus("{LESS_NEW_SEQUENCE_CHANCE}") = decrease the chance of a new sequence starting (relative chance)
               
     {FIRST_WHITE} = make first character white
     {BLUE} = change color to blue
@@ -87,130 +87,175 @@ HELP_MESSAGE = f'''Controls:
     {RED} = change color to red
               
     {CHARS_01} = change characters to "01"
-    {CHARS_ORIGINAL} = change characters to original
-    {CHARS_ANY} = let's you input the characters you want to add or replace
+    {CHARS_ORIGINAL} = reset characters to original set
+    {CHARS_ANY} = prompt for input to add or replace characters
               
-    {CUR_VALUES} = current values
-    {REMOVE_CONTROLS} = remove controls
-    {RETURN_CONTROLS} = bring controls back
+    {CUR_VALUES} = display current values
+    {REMOVE_CONTROLS} = disable keyboard controls temporarily
+    {RETURN_CONTROLS} = re-enable keyboard controls
               
     ctrl+c = stop matrix rain
 '''
 
 
-##############################################################
 def make_sequence():
     """
-    Creates a new sequence with random characters and initializes the current final character index.
+    Create a new sequence for a column.
+
+    This function creates a dictionary representing a new falling sequence. The dictionary
+    contains a list of random characters (one for each color level) and initializes the
+    current final character index to 0.
 
     Returns:
-        dict: A dictionary with a list of random characters for the sequence and the current final character index.
+        dict: A dictionary with the following keys:
+            - 'chars': list of characters for each color level.
+            - 'cur_final_char': int index of the current final character in the sequence.
     """
     return {'chars': [random.choice(CHARACTERS) for _ in range(len(COLORS))], 'cur_final_char': 0}
 
 
-##############################################################
 def columns_to_rows(columns):
     """
-    Converts columns of characters into rows for rendering on the terminal.
+    Convert columns of sequences into rows for terminal display.
+
+    This function iterates over each row index and then over each column. For each column,
+    it finds the sequence whose 'cur_final_char' is at or beyond the current row and uses it
+    to determine which character (and color) to display. If no sequence is present in a column
+    for a given row, a blank space is used.
 
     Args:
-        columns (list): A list of columns, each containing sequences of characters.
+        columns (list): List of columns, where each column is a list of sequence dictionaries.
 
     Returns:
-        list: A list of strings representing each row to be displayed.
+        list: A list of strings, each representing one row of output for display.
     """
     rows = []
     for row_index in range(AMOUNT_OF_ROWS):
         row = ''
         for column in columns:
-            if len(column) == 0: # the column doesn't have any sequences at the moment
+            if not column:  # Column is empty; display blank space.
                 row += ' '
                 continue
 
-            for sequence in column: # selects the sequences that is on this row
+            # Find the first sequence in the column that should be visible on this row.
+            for sequence in column:
                 if sequence['cur_final_char'] >= row_index:
                     break
 
+            # Determine if the sequence has a character for this row.
             if 0 <= sequence['cur_final_char'] - row_index < len(sequence['chars']):
-                color_index = sequence['cur_final_char'] - row_index # = char_index
+                color_index = sequence['cur_final_char'] - row_index
                 color = COLORS[color_index]
                 char = sequence['chars'][color_index]
                 row += f"{color}{char}\033[0m"
-            else: # keeps distance from previous sequence
-                row += ' '
+            else:
+                row += ' '  # Blank if no character is visible.
         rows.append(row)
     return rows
 
 
-##############################################################
 def update_column(column):
     """
-    Updates a given column by removing characters, shifting sequences, and potentially adding new sequences.
+    Update a single column of sequences.
+
+    For each sequence in the column, update its character sequence (shifting or randomly changing
+    characters as appropriate) and increment its 'cur_final_char' counter. Remove sequences that have
+    fallen beyond the display area. Additionally, with some probability, start a new sequence at the top
+    of the column if the conditions are met.
 
     Args:
-        column (list): A list of sequences in a single column.
+        column (list): A list of sequence dictionaries representing the current sequences in a column.
 
     Returns:
         list: The updated list of sequences for the column.
     """
     new_column = []
     
-    if len(column) == 0: # if the column is empty keep the same chance for a sequence to form without breaking the following code
+    # If the column is empty, possibly start a new sequence.
+    if len(column) == 0:
         return [make_sequence()] if random.random() < NEW_SEQUENCE_CHANCE else []
 
-    for i, sequence in enumerate(column):
-        if MODE: # changes if the first letter of a sequence is random and others change to it or if the sequence doesn't change
+    for sequence in column:
+        if MODE:
+            # Shift the sequence: remove the last char and insert a new random char at the beginning.
             sequence['chars'].pop()
             sequence['chars'].insert(0, random.choice(CHARACTERS))
 
-        if RANDOM_CHAR_CHANGE_CHANCE: # if isn't necessary
+        if RANDOM_CHAR_CHANGE_CHANCE:
+            # For each character, possibly change it based on the random chance.
             for char_index, char in enumerate(sequence['chars'].copy()):
-                sequence['chars'][char_index] = random.choice(CHARACTERS) if random.random() < RANDOM_CHAR_CHANGE_CHANCE else char
+                if random.random() < RANDOM_CHAR_CHANGE_CHANCE:
+                    sequence['chars'][char_index] = random.choice(CHARACTERS)
 
         sequence['cur_final_char'] += 1
 
-        if not (sequence['cur_final_char'] > (AMOUNT_OF_ROWS + len(sequence['chars']))): # erases sequences that are past the limit of rows
+        # Keep sequences that are still within the visible range.
+        if sequence['cur_final_char'] <= (AMOUNT_OF_ROWS + len(sequence['chars'])):
             new_column.append(sequence)
 
-    if len(new_column) > 0: # if the column doesn't have any sequences, it would cause an error trying to find the index [0]
+    # Possibly add a new sequence at the top of the column.
+    if new_column:
         first_sequence = new_column[0]
-
-        if first_sequence['cur_final_char'] >= len(COLORS) and random.random() < NEW_SEQUENCE_CHANCE: # chance for a new sequence to start
+        if first_sequence['cur_final_char'] >= len(COLORS) and random.random() < NEW_SEQUENCE_CHANCE:
             new_column.insert(0, make_sequence())
         
     return new_column
 
 
-##############################################################
-def check_keyboard(count, columns): 
+def flush_stdin():
     """
-    Checks for keyboard input and updates relevant variables such as speed, mode, matrix dimensions, colors, and characters.
+    Flush the standard input buffer.
+
+    This function clears any buffered input from the terminal. On Windows, it uses the msvcrt module;
+    on Unix-like systems, it uses the termios module.
+
+    Note:
+        On Windows, ensure that the msvcrt module is available.
+    """
+    if os.name == 'nt':
+        # Windows: Drain any pending keystrokes.
+        import msvcrt
+        while msvcrt.kbhit():
+            msvcrt.getch()
+    else:
+        # Unix-like systems: Flush the input buffer.
+        import termios
+        termios.tcflush(sys.stdin, termios.TCIFLUSH)
+
+
+def check_keyboard(count, columns):
+    """
+    Check keyboard input and update global settings and column data accordingly.
+
+    This function uses the keyboard module to detect key presses and adjusts variables such as
+    animation speed, mode, display dimensions, colors, and the character set. It also manages debouncing
+    using a list of timestamps.
 
     Args:
-        count (int): A counter used to track the frequency of keypress checks.
-        columns (list): The current list of columns.
+        count (list): A list of timestamps used to debounce keypress events.
+        columns (list): The current list of columns for the matrix rain.
 
     Returns:
-        tuple: The updated count value and the updated columns.
+        tuple: A tuple (updated_count, updated_columns, clear_flag) where:
+            - updated_count: The possibly updated list of timestamps.
+            - updated_columns: The possibly updated list of columns.
+            - clear_flag (bool): True if the terminal should be cleared due to a change.
+            - If the controls have been disabled (via REMOVE_CONTROLS), the function returns ('stop', columns, clear_flag).
     """
-    # keep in mind that arrows result in numbers also getting pressed: up = 8, right = 6, down = 2, left = 4
-    # press h for help
-
     global TIME_BETWEEN_FRAMES, AMOUNT_OF_COLUMNS, AMOUNT_OF_ROWS, COLORS, NEW_SEQUENCE_CHANCE, CHARACTERS, MODE, RANDOM_CHAR_CHANGE_CHANCE
-    cur_time = time.monotonic()
-    time_passed = [cur_time - i for i in count]
+    cur_time = time.time()
+    time_passed = [cur_time - t for t in count]
     time_used = 0
     clear = False
 
-    if time_passed[time_used] > 0.05 and keyboard.is_pressed(SPEED_UP):
+    if time_passed[time_used] > 0.08 and keyboard.is_pressed(SPEED_UP):
         count[time_used] = cur_time
-        TIME_BETWEEN_FRAMES /= 1.015
+        TIME_BETWEEN_FRAMES /= 1.02
     time_used += 1
 
-    if time_passed[time_used] > 0.05 and keyboard.is_pressed(SLOW_DOWN):
+    if time_passed[time_used] > 0.08 and keyboard.is_pressed(SLOW_DOWN):
         count[time_used] = cur_time
-        TIME_BETWEEN_FRAMES *= 1.015
+        TIME_BETWEEN_FRAMES *= 1.02
     time_used += 1
 
     if time_passed[time_used] > 0.25 and keyboard.is_pressed(PAUSE):
@@ -218,7 +263,7 @@ def check_keyboard(count, columns):
         while True:
             time.sleep(0.01)
             if keyboard.is_pressed(PAUSE):
-                count[time_used] = time.monotonic()
+                count[time_used] = time.time()
                 break
     time_used += 1
 
@@ -226,128 +271,106 @@ def check_keyboard(count, columns):
         count[time_used] = cur_time
         MODE = not MODE
     time_used += 1
-    
-    if time_passed[time_used] > 0.09 and keyboard.is_pressed(SHORTEN_LENGTH) and AMOUNT_OF_ROWS > 0 and not keyboard.is_pressed('shift'):
+
+    if time_passed[time_used] > 0.09 and AMOUNT_OF_ROWS > 0 and not keyboard.is_pressed('shift') and keyboard.is_pressed(SHORTEN_LENGTH):
         count[time_used] = cur_time
         AMOUNT_OF_ROWS -= 1
         clear = True
     time_used += 1
 
-    if time_passed[time_used] > 0.09 and keyboard.is_pressed(INCREASE_LENGTH) and not keyboard.is_pressed('shift') and AMOUNT_OF_ROWS < 70:
+    if time_passed[time_used] > 0.09 and AMOUNT_OF_ROWS < 80 and not keyboard.is_pressed('shift') and keyboard.is_pressed(INCREASE_LENGTH):
         count[time_used] = cur_time
         AMOUNT_OF_ROWS += 1
         clear = True
     time_used += 1
 
-    if time_passed[time_used] > 0.05 and keyboard.is_pressed(LESS_COLUMNS) and AMOUNT_OF_COLUMNS > 0:
+    if time_passed[time_used] > 0.05 and AMOUNT_OF_COLUMNS > 0 and keyboard.is_pressed(LESS_COLUMNS):
         count[time_used] = cur_time
         AMOUNT_OF_COLUMNS -= 1
         columns.pop(-1)
         clear = True
     time_used += 1
 
-    if  time_passed[time_used] > 0.05 and keyboard.is_pressed(MORE_COLUMNS) and AMOUNT_OF_COLUMNS < 200:
+    if time_passed[time_used] > 0.05 and AMOUNT_OF_COLUMNS < 200 and keyboard.is_pressed(MORE_COLUMNS):
         count[time_used] = cur_time
         AMOUNT_OF_COLUMNS += 1
         columns.append([])
         clear = True
     time_used += 1
 
-    if time_passed[time_used] and keyboard.is_pressed(LESS_NEW_SEQUENCE_CHANCE) > 0.1:
+    if time_passed[time_used] > 0.1 and keyboard.is_pressed(LESS_NEW_SEQUENCE_CHANCE):
         count[time_used] = cur_time
-        NEW_SEQUENCE_CHANCE /= 1.05
+        NEW_SEQUENCE_CHANCE /= 1.03
     time_used += 1
 
-    if time_passed[time_used] and (keyboard.is_pressed(MORE_NEW_SEQUENCE_CHANCE) or keyboard.is_pressed('=+shift') and NEW_SEQUENCE_CHANCE <= 1) > 0.1:
+    if time_passed[time_used] > 0.1 and NEW_SEQUENCE_CHANCE <= 1 and (keyboard.is_pressed('=+shift') or keyboard.is_pressed(MORE_NEW_SEQUENCE_CHANCE)):
         count[time_used] = cur_time
-        NEW_SEQUENCE_CHANCE *= 1.05
+        NEW_SEQUENCE_CHANCE *= 1.03
     time_used += 1
 
-    if time_passed[time_used] and keyboard.is_pressed(LESS_RANDOM_CHAR) > 0.15:
+    if time_passed[time_used] > 0.15 and keyboard.is_pressed(LESS_RANDOM_CHAR):
         count[time_used] = cur_time
-        RANDOM_CHAR_CHANGE_CHANCE *= 1.05
+        RANDOM_CHAR_CHANGE_CHANCE /= 1.05
         if RANDOM_CHAR_CHANGE_CHANCE < 0.01:
             RANDOM_CHAR_CHANGE_CHANCE = 0
         time_used += 1
 
-    if time_passed[time_used] and keyboard.is_pressed(MORE_RANDOM_CHAR) and RANDOM_CHAR_CHANGE_CHANCE <= 1 > 0.15:
+    if time_passed[time_used] > 0.15 and RANDOM_CHAR_CHANGE_CHANCE <= 1 and keyboard.is_pressed(MORE_RANDOM_CHAR):
         count[time_used] = cur_time
         if RANDOM_CHAR_CHANGE_CHANCE == 0:
             RANDOM_CHAR_CHANGE_CHANCE = 0.01
-        RANDOM_CHAR_CHANGE_CHANCE /= 1.05
+        RANDOM_CHAR_CHANGE_CHANCE *= 1.05
     # time_used += 1
 
+    # Color and character set changes (not debounced)
     if keyboard.is_pressed(FIRST_WHITE):
-        COLORS[0] = "\033[0m" # white = Reset color (default terminal color)
+        COLORS[0] = "\033[0m"  # Reset to default white
 
     if keyboard.is_pressed(RED):
-        COLORS = ["\033[38;2;255;64;64m",  # Brightest red with a slight glow effect
-                  "\033[38;2;255;0;0m",    # Brightest red
-                  "\033[38;2;240;0;0m",    # Slightly less bright red
-                  "\033[38;2;224;0;0m",    # Brighter red
-                  "\033[38;2;208;0;0m",    # Bright red
-                  "\033[38;2;192;0;0m",    # Medium bright red
-                  "\033[38;2;176;0;0m",    # Medium red
-                  "\033[38;2;160;0;0m",    # Slightly dark red
-                  "\033[38;2;144;0;0m"]    # Dark red
-        
+        COLORS = ["\033[38;2;255;64;64m",  # Brightest red with slight glow
+                  "\033[38;2;255;0;0m",
+                  "\033[38;2;240;0;0m",
+                  "\033[38;2;224;0;0m",
+                  "\033[38;2;208;0;0m",
+                  "\033[38;2;192;0;0m",
+                  "\033[38;2;176;0;0m",
+                  "\033[38;2;160;0;0m",
+                  "\033[38;2;144;0;0m"]
+
     if keyboard.is_pressed(GREEN):
-        COLORS = ["\033[38;2;64;255;64m", # Brightest green with a slight glow effect
-                  "\033[38;2;0;255;0m",   # Brightest green
-                  "\033[38;2;0;208;0m",   # Brighter green
-                  "\033[38;2;0;176;0m",   # Bright green
-                  "\033[38;2;0;144;0m",   # Medium green
-                  "\033[38;2;0;112;0m",   # Slightly dark green
-                  "\033[38;2;0;80;0m",    # Dark green
-                  "\033[38;2;0;48;0m",    # Darker green
-                  "\033[38;2;0;16;0m"]    # Very dark green
-        
+        COLORS = ["\033[38;2;64;255;64m",  # Brightest green with slight glow
+                  "\033[38;2;0;255;0m",
+                  "\033[38;2;0;208;0m",
+                  "\033[38;2;0;176;0m",
+                  "\033[38;2;0;144;0m",
+                  "\033[38;2;0;112;0m",
+                  "\033[38;2;0;80;0m",
+                  "\033[38;2;0;48;0m",
+                  "\033[38;2;0;16;0m"]
+
     if keyboard.is_pressed(BLUE):
-        COLORS = ["\033[38;2;64;255;255m", # Brightest cyan with a slight glow effect
-                  "\033[38;2;0;255;255m",   # Brightest cyan
-                  "\033[38;2;0;208;208m",   # Brighter cyan
-                  "\033[38;2;0;176;176m",   # Bright cyan
-                  "\033[38;2;0;144;144m",   # Medium cyan
-                  "\033[38;2;0;112;112m",   # Slightly dark cyan
-                  "\033[38;2;0;80;80m",     # Dark cyan
-                  "\033[38;2;0;48;48m",     # Darker cyan
-                  "\033[38;2;0;16;16m"]     # Very dark cyan
-        
+        COLORS = ["\033[38;2;64;255;255m",  # Brightest cyan with slight glow
+                  "\033[38;2;0;255;255m",
+                  "\033[38;2;0;208;208m",
+                  "\033[38;2;0;176;176m",
+                  "\033[38;2;0;144;144m",
+                  "\033[38;2;0;112;112m",
+                  "\033[38;2;0;80;80m",
+                  "\033[38;2;0;48;48m",
+                  "\033[38;2;0;16;16m"]
+
     if keyboard.is_pressed(CHARS_01):
         CHARACTERS = '01'
 
     if keyboard.is_pressed(CHARS_ORIGINAL):
         CHARACTERS = "ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍｦｲｸｺｿﾁﾄﾉﾌﾤﾨﾛﾝ012345789:.=*+-<>"
 
-    # if keyboard.is_pressed('9'):
-    #     time.sleep(0.2)
-    #     CHARACTERS = ''
-    #     while len(CHARACTERS) < 100:
-    #         char = keyboard.read_key()
-    #         if char == 'enter' and len(CHARACTERS.strip()) > 0:
-    #             break
-    #         elif len(char) > 1:
-    #             continue
-    #         elif not (char in CHARACTERS):
-    #             CHARACTERS += char
-
-    # if keyboard.is_pressed('8') and not keyboard.is_pressed('up'):
-    #     time.sleep(0.2)
-    #     while len(CHARACTERS) < 100:
-    #         char = keyboard.read_key()
-    #         if char == 'enter' and len(CHARACTERS.strip()) > 0:
-    #             break
-    #         elif len(char) > 1:
-    #             continue
-    #         elif not (char in CHARACTERS):
-    #             CHARACTERS += char
-
+    # Character set modification using CHARS_ANY
     if keyboard.is_pressed(CHARS_ANY):
-        # os.system('cls' if os.name == 'nt' else 'clear')
-        while True: # chars gets all written things in the terminal even enters before 7 seven is pressed put into as if it was there the entire time
-                check = input('Enter "9" and then press enter: ')
-                if '9' in check:
-                    break
+        flush_stdin()  # Remove any pending input from the terminal.
+        print()
+        sys.stdout.write("\033[?25h")
+        sys.stdout.flush()
         while True:
             chars = input('Characters: ')
             if len(chars) > 100:
@@ -359,36 +382,38 @@ def check_keyboard(count, columns):
                     break
             if add == 'a':
                 if len(chars + CHARACTERS) > 100:
-                    print('Sorry that would result in too many chararacters')
+                    print('Sorry that would result in too many characters')
                     continue
                 CHARACTERS += chars
             elif add == 'r':
-                if len(chars) == 0:
-                    chars = ' '
-                CHARACTERS = chars
+                CHARACTERS = chars if chars else ' '
             break
+        sys.stdout.write("\033[?25l")
+        sys.stdout.flush()
         clear = True
 
     if keyboard.is_pressed(CUR_VALUES):
+        flush_stdin()
         print(f'''
-NEW_SEQUENCE_CHANCE = {round(NEW_SEQUENCE_CHANCE, 4)} (Chance for a column to reset when it becomes empty (0 to 1))
-RANDOM_CHAR_CHANGE_CHANCE = {round(RANDOM_CHAR_CHANGE_CHANCE, 4)} (chance for chars to change in the middle of the sequence)
-TIME_BETWEEN_FRAMES = {round(TIME_BETWEEN_FRAMES, 4)} (how fast the the characters fall)
+NEW_SEQUENCE_CHANCE = {round(NEW_SEQUENCE_CHANCE, 4)} (Chance for a column to reset when empty; range: 0 to 1)
+RANDOM_CHAR_CHANGE_CHANCE = {round(RANDOM_CHAR_CHANGE_CHANCE, 4)} (Chance for characters to change mid-sequence)
+
+TIME_BETWEEN_FRAMES = {round(TIME_BETWEEN_FRAMES, 4)} (Delay between frame updates)
 
 AMOUNT_OF_COLUMNS = {AMOUNT_OF_COLUMNS}
 AMOUNT_OF_ROWS = {AMOUNT_OF_ROWS}
 
-MODE = {MODE} (changes if the first letter of a sequence is random and others change to it or if the sequence doesn't change)
+MODE = {MODE} (Toggle for sequence update behavior)
 
 CHARACTERS = {CHARACTERS}
-
 COLORS = {COLORS}
 ''')
         input('Press enter to continue...')
         clear = True
 
     if keyboard.is_pressed(SHOW_HELP_MESSAGE):
-        # os.system('cls' if os.name == 'nt' else 'clear')
+        flush_stdin()
+        print()
         print(HELP_MESSAGE)
         input('Press enter to continue...')
         clear = True
@@ -396,70 +421,87 @@ COLORS = {COLORS}
     if keyboard.is_pressed(REMOVE_CONTROLS):
         return 'stop', columns, clear
 
-    time.sleep(0.01)
+    time.sleep(0.001)
     return count, columns, clear
 
 
-##############################################################
-def clear_if_necessary(clear, rows, old_terminal_size, old_rows, old_columns):
-    if old_terminal_size != os.get_terminal_size().lines: # if you change the terminal size, it can cause lines to duplicate
+def clear_if_necessary(clear, old_terminal_size):
+    """
+    Clear the terminal screen if necessary.
+
+    This function checks if the terminal size has changed or if a control event has flagged a clear.
+    If so, it clears the screen using the appropriate command for the operating system.
+
+    Args:
+        clear (bool): Flag indicating whether a clear is requested.
+        old_terminal_size (int): The previous terminal size (number of lines).
+
+    Returns:
+        None
+    """
+    if old_terminal_size != os.get_terminal_size().lines:
         clear = True
 
     terminal_size = os.get_terminal_size().lines
-    if terminal_size <= len(rows): # if the terminal size is smaller than the amount of rows, the prints don't disappear
+    if terminal_size <= AMOUNT_OF_ROWS:
         clear = True
 
     if clear:
         os.system('cls' if os.name == 'nt' else 'clear')
 
-    return terminal_size
 
-
-##############################################################
 def run_matrix():
-    columns = [[] for _ in range(AMOUNT_OF_COLUMNS)] # Initialize columns
-    count = [time.monotonic() for _ in range(12)] # prevents some controls from doing things too fast
+    """
+    Run the Matrix rain animation.
+
+    This is the main animation loop. It initializes the columns and debouncing timers,
+    then continuously updates and displays the falling character sequences. Keyboard input
+    is checked between frame updates to adjust settings and behavior in real-time.
+
+    Returns:
+        None
+    """
+    columns = [[] for _ in range(AMOUNT_OF_COLUMNS)]  # Initialize columns.
+    count = [time.time() for _ in range(12)]  # Debounce timers for key presses.
     old_terminal_size = os.get_terminal_size().lines
     clear = True
-    old_rows = AMOUNT_OF_ROWS
-    old_columns = AMOUNT_OF_COLUMNS
+    sys.stdout.write("\033[?25l") # Hide the cursor
+    sys.stdout.flush()
 
-    # Main animation loop
     try:
         while True:
-            start_time = time.monotonic() # using delay would cause the controls to act differently when TIME_BETWEEN_FRAMES changes
-            rows = columns_to_rows(columns)
+            start_time = time.time()  # Track the frame start time.
+            rows = "\n".join(columns_to_rows(columns))
 
-            old_terminal_size = clear_if_necessary(clear, rows, old_terminal_size, old_rows, old_columns)
+            clear_if_necessary(clear, old_terminal_size)
             clear = False
-            old_rows = AMOUNT_OF_ROWS
-            old_columns = AMOUNT_OF_COLUMNS
+            old_terminal_size = os.get_terminal_size().lines
 
-            output = "\033[H" + "\n".join(rows) + "\n"
-            sys.stdout.write(output)
+            # Move cursor to top left and output the frame.
+            sys.stdout.write("\033[H" + rows + "\n")
             sys.stdout.flush()
 
+            # Update each column.
             columns = [update_column(column) for column in columns]
 
-            while True: # while time.monotonic() - start_time < TIME_BETWEEN_FRAMES could cause the controls to not be called at all
-
-                if count != 'stop': # backspace prevents controls so that user can use their keyboard without worrying
+            # Process keyboard events until the frame delay has passed.
+            while True:
+                if count != 'stop':  # If controls are active.
                     count, columns, check_clear = check_keyboard(count, columns)
-
                     if check_clear:
                         clear = True
-
                 elif keyboard.is_pressed(RETURN_CONTROLS):
-                    count = [time.monotonic() for _ in range(12)]
+                    count = [time.time() for _ in range(12)]
 
-                if time.monotonic() - start_time > TIME_BETWEEN_FRAMES:
+                if time.time() - start_time > TIME_BETWEEN_FRAMES:
                     break
 
     except KeyboardInterrupt:
-        # os.system('cls' if os.name == 'nt' else 'clear')
-        # for row in rows:
-        #     print(row)
-        print('Matrix rain stopped')
+        pass
+    finally:
+        sys.stdout.write("\033[?25h") # restore the cursor
+        sys.stdout.flush()
+        print('\nMatrix rain stopped')
 
 
 if __name__ == '__main__':
