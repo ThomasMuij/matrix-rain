@@ -43,8 +43,8 @@ LESS_COLUMNS = 'left'
 MORE_COLUMNS = 'right'
 
 # if removing ctrl or changing to something else than an arrow, upade the HELP_MESSAGE:
-LESS_EXTRA_LINES = 'ctrl+up' 
-MORE_EXTRA_LINES = 'ctrl+down'
+LESS_EXTRA_LINES = 'shift+up' 
+MORE_EXTRA_LINES = 'shift+down'
 
 # if changing update HELP_MESSAGE and if keyboard...:
 MORE_NEW_SEQUENCE_CHANCE = '+'
@@ -164,7 +164,7 @@ def update_column(column):
 
     for i, sequence in enumerate(column):
         if MODE: # changes if the first letter of a sequence is random and others change to it or if the sequence doesn't change
-            sequence['chars'].pop(-1)
+            sequence['chars'].pop()
             sequence['chars'].insert(0, random.choice(CHARACTERS))
 
         if RANDOM_CHAR_CHANGE_CHANCE: # if isn't necessary
@@ -201,22 +201,23 @@ def check_keyboard(count, columns, extra_lines):
     # press h for help
 
     global TIME_BETWEEN_FRAMES, AMOUNT_OF_COLUMNS, AMOUNT_OF_ROWS, COLORS, NEW_SEQUENCE_CHANCE, CHARACTERS, MODE, RANDOM_CHAR_CHANGE_CHANCE
-    cur_time = time.time()
+    cur_time = time.monotonic()
     time_passed = [cur_time - i for i in count]
 
     if keyboard.is_pressed(SPEED_UP) and time_passed[0] > 0.1:
         count[0] = cur_time
-        TIME_BETWEEN_FRAMES -= TIME_BETWEEN_FRAMES * 0.04
+        TIME_BETWEEN_FRAMES /= 1.04
 
     if keyboard.is_pressed(SLOW_DOWN) and time_passed[1] > 0.1:
         count[1] = cur_time
-        TIME_BETWEEN_FRAMES += TIME_BETWEEN_FRAMES * 0.04
+        TIME_BETWEEN_FRAMES *= 1.04
 
     if keyboard.is_pressed(PAUSE) and time_passed[2] > 0.25:
         time.sleep(0.25)
         while True:
+            time.sleep(0.01)
             if keyboard.is_pressed(PAUSE):
-                count[2] = time.time()
+                count[2] = time.monotonic()
                 break
 
     if keyboard.is_pressed(MODE_CHAR) and time_passed[3] > 0.3:
@@ -252,15 +253,15 @@ def check_keyboard(count, columns, extra_lines):
 
     if keyboard.is_pressed(LESS_NEW_SEQUENCE_CHANCE) and time_passed[10] > 0.1:
         count[10] = cur_time
-        NEW_SEQUENCE_CHANCE -= NEW_SEQUENCE_CHANCE/20
+        NEW_SEQUENCE_CHANCE /= 1.05
 
     if (keyboard.is_pressed(MORE_NEW_SEQUENCE_CHANCE) or keyboard.is_pressed('=+shift') and NEW_SEQUENCE_CHANCE <= 1) and time_passed[11] > 0.1:
         count[11] = cur_time
-        NEW_SEQUENCE_CHANCE += NEW_SEQUENCE_CHANCE/20
+        NEW_SEQUENCE_CHANCE *= 1.05
 
     if keyboard.is_pressed(LESS_RANDOM_CHAR) and time_passed[12] > 0.15:
         count[12] = cur_time
-        RANDOM_CHAR_CHANGE_CHANCE -= RANDOM_CHAR_CHANGE_CHANCE/20
+        RANDOM_CHAR_CHANGE_CHANCE *= 1.05
         if RANDOM_CHAR_CHANGE_CHANCE < 0.01:
             RANDOM_CHAR_CHANGE_CHANCE = 0
 
@@ -268,7 +269,7 @@ def check_keyboard(count, columns, extra_lines):
         count[13] = cur_time
         if RANDOM_CHAR_CHANGE_CHANCE == 0:
             RANDOM_CHAR_CHANGE_CHANCE = 0.01
-        RANDOM_CHAR_CHANGE_CHANCE += RANDOM_CHAR_CHANGE_CHANCE/20
+        RANDOM_CHAR_CHANGE_CHANCE /= 1.05
 
     if keyboard.is_pressed(FIRST_WHITE):
         COLORS[0] = "\033[0m" # white = Reset color (default terminal color)
@@ -392,13 +393,13 @@ COLORS = {COLORS}
 ##############################################################
 def run_matrix():
     columns = [[] for _ in range(AMOUNT_OF_COLUMNS)] # Initialize columns
-    count = [time.time() for _ in range(14)] # prevents some controls from doing things too fast
+    count = [time.monotonic() for _ in range(14)] # prevents some controls from doing things too fast
     extra_lines = 0
 
     # Main animation loop
     try:
         while True:
-            start_time = time.time() # using delay would cause the controls to act differently when TIME_BETWEEN_FRAMES changes
+            start_time = time.monotonic() # using delay would cause the controls to act differently when TIME_BETWEEN_FRAMES changes
             rows = columns_to_rows(columns)
             
             os.system('cls' if os.name == 'nt' else 'clear')  # Clear the terminal
@@ -409,13 +410,13 @@ def run_matrix():
 
             columns = [update_column(column) for column in columns]
 
-            while True: # while time.time() - start_time < TIME_BETWEEN_FRAMES could cause the controls to not be called at all
+            while True: # while time.monotonic() - start_time < TIME_BETWEEN_FRAMES could cause the controls to not be called at all
                 if count != 'stop': # backspace prevents controls so that user can use their keyboard without worrying
                     count, columns, extra_lines = check_keyboard(count, columns, extra_lines)
                 elif keyboard.is_pressed(RETURN_CONTROLS):
-                    count = [time.time() for _ in range(14)]
+                    count = [time.monotonic() for _ in range(14)]
 
-                if time.time() - start_time > TIME_BETWEEN_FRAMES:
+                if time.monotonic() - start_time > TIME_BETWEEN_FRAMES:
                     break
 
     except KeyboardInterrupt:
