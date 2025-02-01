@@ -4,14 +4,17 @@ import os
 import keyboard
 import sys
 
-NEW_SEQUENCE_CHANCE = 0.025
+NEW_SEQUENCE_CHANCE = 0.02
 RANDOM_CHAR_CHANGE_CHANCE = 0
 TIME_BETWEEN_FRAMES = 0.045
+
+MIN_SEQUENCE_SPEED = 0.3 # 1/sequence_speed = frames to move the sequence; sequence_speed has a range from MIN_SEQUENCE_SPEED to 1
 
 AMOUNT_OF_COLUMNS = 150
 AMOUNT_OF_ROWS = 20
 
 MODE = True  # If True, the first letter of a sequence is random and the rest follow; otherwise the sequence remains unchanged.
+AUTO_SIZE = False
 
 CHARACTERS = "ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍｦｲｸｺｿﾁﾄﾉﾌﾤﾨﾛﾝ012345789:.=*+-<>"
 
@@ -32,8 +35,12 @@ COLORS = [
 SPEED_UP = 'f'
 SLOW_DOWN = 's'
 
+INCREASE_SPEED_DIFF = 'shift+s'
+REDUCE_SPEED_DIFF = 'shift+f'
+
 PAUSE = 'p'
 MODE_CHAR = 'q'
+AUTO_SIZE_CHAR = 'a'
 
 MORE_RANDOM_CHAR = 'shift+up'
 LESS_RANDOM_CHAR = 'shift+down'
@@ -67,8 +74,13 @@ HELP_MESSAGE = f'''Controls:
     
     {SPEED_UP} = speed up (relative to current speed)
     {SLOW_DOWN} = slow down (relative to current speed)
+
+    {INCREASE_SPEED_DIFF} = allow some sequences to move slower (for example every 3 frames)
+    {REDUCE_SPEED_DIFF} = make all sequences move closer to once per frame
+
     {PAUSE} = (un)pause
     {MODE_CHAR} = toggles if the first letter of a sequence is random and the rest follow or if the sequence remains unchanged
+    {AUTO_SIZE_CHAR} = adjusts matrix length and width based on the terminal's size
 
     {MORE_RANDOM_CHAR} = increase chance for characters to change mid-sequence
     {LESS_RANDOM_CHAR} = decrease chance for characters to change mid-sequence
@@ -111,7 +123,9 @@ def make_sequence():
             - 'chars': list of characters for each color level.
             - 'cur_final_char': int index of the current final character in the sequence.
     """
-    return {'chars': [random.choice(CHARACTERS) for _ in range(len(COLORS))], 'cur_final_char': 0}
+    return {'chars': [random.choice(CHARACTERS) for _ in range(len(COLORS))],
+             'cur_final_char': 0,
+             'speed': random.uniform(MIN_SEQUENCE_SPEED, 1)}
 
 
 def columns_to_rows(columns):
@@ -139,12 +153,12 @@ def columns_to_rows(columns):
 
             # Find the first sequence in the column that should be visible on this row.
             for sequence in column:
-                if sequence['cur_final_char'] >= row_index:
+                if round(sequence['cur_final_char']) >= row_index:
                     break
 
             # Determine if the sequence has a character for this row.
-            if 0 <= sequence['cur_final_char'] - row_index < len(sequence['chars']):
-                color_index = sequence['cur_final_char'] - row_index
+            if 0 <= round(sequence['cur_final_char']) - row_index < len(sequence['chars']):
+                color_index = round(sequence['cur_final_char']) - row_index
                 color = COLORS[color_index]
                 char = sequence['chars'][color_index]
                 row += f"{color}{char}\033[0m"
@@ -157,42 +171,48 @@ def columns_to_rows(columns):
 def update_column(column):
     """
     Update a single column of sequences.
-
+    
     For each sequence in the column, update its character sequence (shifting or randomly changing
     characters as appropriate) and increment its 'cur_final_char' counter. Remove sequences that have
     fallen beyond the display area. Additionally, with some probability, start a new sequence at the top
     of the column if the conditions are met.
-
+    
     Args:
         column (list): A list of sequence dictionaries representing the current sequences in a column.
-
+    
     Returns:
-        list: The updated list of sequences for the column.
+        list: The updated (and sorted) list of sequences for the column.
     """
     new_column = []
     
     # If the column is empty, possibly start a new sequence.
     if len(column) == 0:
         return [make_sequence()] if random.random() < NEW_SEQUENCE_CHANCE else []
-
+    
+    # Update each sequence.
     for sequence in column:
         if MODE:
             # Shift the sequence: remove the last char and insert a new random char at the beginning.
-            sequence['chars'].pop()
-            sequence['chars'].insert(0, random.choice(CHARACTERS))
-
+            if round(sequence['cur_final_char']) != round(sequence['cur_final_char'] + sequence['speed']):
+                sequence['chars'].pop()
+                sequence['chars'].insert(0, random.choice(CHARACTERS))
+        
         if RANDOM_CHAR_CHANGE_CHANCE:
             # For each character, possibly change it based on the random chance.
-            for char_index, char in enumerate(sequence['chars'].copy()):
+            for char_index in range(len(sequence['chars'])):
                 if random.random() < RANDOM_CHAR_CHANGE_CHANCE:
                     sequence['chars'][char_index] = random.choice(CHARACTERS)
-
-        sequence['cur_final_char'] += 1
-
+        
+        # Increment the sequence's position.
+        sequence['cur_final_char'] += sequence['speed']
+        
         # Keep sequences that are still within the visible range.
         if sequence['cur_final_char'] <= (AMOUNT_OF_ROWS + len(sequence['chars'])):
             new_column.append(sequence)
-
+    
+    # Sort the column so that the sequence with the lowest cur_final_char is at the front.
+    new_column.sort(key=lambda seq: seq['cur_final_char'])
+    
     # Possibly add a new sequence at the top of the column.
     if new_column:
         first_sequence = new_column[0]
@@ -242,20 +262,30 @@ def check_keyboard(count, columns):
             - clear_flag (bool): True if the terminal should be cleared due to a change.
             - If the controls have been disabled (via REMOVE_CONTROLS), the function returns ('stop', columns, clear_flag).
     """
-    global TIME_BETWEEN_FRAMES, AMOUNT_OF_COLUMNS, AMOUNT_OF_ROWS, COLORS, NEW_SEQUENCE_CHANCE, CHARACTERS, MODE, RANDOM_CHAR_CHANGE_CHANCE
+    global TIME_BETWEEN_FRAMES, AMOUNT_OF_COLUMNS, AMOUNT_OF_ROWS, COLORS, NEW_SEQUENCE_CHANCE, CHARACTERS, MODE, RANDOM_CHAR_CHANGE_CHANCE, AUTO_SIZE, MIN_SEQUENCE_SPEED
     cur_time = time.time()
     time_passed = [cur_time - t for t in count]
     time_used = 0
     clear = False
 
-    if time_passed[time_used] > 0.08 and keyboard.is_pressed(SPEED_UP):
+    if time_passed[time_used] > 0.08 and not keyboard.is_pressed('shift') and keyboard.is_pressed(SPEED_UP):
         count[time_used] = cur_time
         TIME_BETWEEN_FRAMES /= 1.02
     time_used += 1
 
-    if time_passed[time_used] > 0.08 and keyboard.is_pressed(SLOW_DOWN):
+    if time_passed[time_used] > 0.08 and not keyboard.is_pressed('shift') and keyboard.is_pressed(SLOW_DOWN):
         count[time_used] = cur_time
         TIME_BETWEEN_FRAMES *= 1.02
+    time_used += 1
+
+    if time_passed[time_used] > 0.08 and keyboard.is_pressed(REDUCE_SPEED_DIFF):
+        count[time_used] = cur_time
+        MIN_SEQUENCE_SPEED = min(1, MIN_SEQUENCE_SPEED * 1.04)
+    time_used += 1
+
+    if time_passed[time_used] > 0.08 and keyboard.is_pressed(INCREASE_SPEED_DIFF):
+        count[time_used] = cur_time
+        MIN_SEQUENCE_SPEED = max(0.05, MIN_SEQUENCE_SPEED / 1.04)
     time_used += 1
 
     if time_passed[time_used] > 0.25 and keyboard.is_pressed(PAUSE):
@@ -270,6 +300,11 @@ def check_keyboard(count, columns):
     if time_passed[time_used] > 0.3 and keyboard.is_pressed(MODE_CHAR):
         count[time_used] = cur_time
         MODE = not MODE
+    time_used += 1
+
+    if time_passed[time_used] > 0.3 and keyboard.is_pressed(AUTO_SIZE_CHAR):
+        count[time_used] = cur_time
+        AUTO_SIZE = not AUTO_SIZE
     time_used += 1
 
     if time_passed[time_used] > 0.09 and AMOUNT_OF_ROWS > 0 and not keyboard.is_pressed('shift') and keyboard.is_pressed(SHORTEN_LENGTH):
@@ -399,11 +434,13 @@ NEW_SEQUENCE_CHANCE = {round(NEW_SEQUENCE_CHANCE, 4)} (Chance for a column to re
 RANDOM_CHAR_CHANGE_CHANCE = {round(RANDOM_CHAR_CHANGE_CHANCE, 4)} (Chance for characters to change mid-sequence)
 
 TIME_BETWEEN_FRAMES = {round(TIME_BETWEEN_FRAMES, 4)} (Delay between frame updates)
+MIN_SEQUENCE_SPEED = {round(MIN_SEQUENCE_SPEED, 4)} (1/sequence_speed = frames to move the sequence; range(speed): MIN_SEQUENCE_SPEED to 1)
 
 AMOUNT_OF_COLUMNS = {AMOUNT_OF_COLUMNS}
 AMOUNT_OF_ROWS = {AMOUNT_OF_ROWS}
 
 MODE = {MODE} (Toggle for sequence update behavior)
+AUTO_SIZE = {AUTO_SIZE} (Toggle for automatic resizing)
 
 CHARACTERS = {CHARACTERS}
 COLORS = {COLORS}
@@ -450,6 +487,28 @@ def clear_if_necessary(clear, old_terminal_size):
         os.system('cls' if os.name == 'nt' else 'clear')
 
 
+def ADJUST_SIZE(columns, clear):
+    global AMOUNT_OF_COLUMNS, AMOUNT_OF_ROWS
+    lines = os.get_terminal_size().lines
+    if AMOUNT_OF_ROWS < lines:
+        AMOUNT_OF_ROWS = os.get_terminal_size().lines - 1
+    else:
+        AMOUNT_OF_ROWS = os.get_terminal_size().lines
+
+    AMOUNT_OF_COLUMNS = os.get_terminal_size().columns
+
+    if AMOUNT_OF_COLUMNS < len(columns):
+        columns = columns[:AMOUNT_OF_COLUMNS]
+        clear = True
+    elif AMOUNT_OF_COLUMNS == len(columns):
+        pass
+    else:
+        columns.append([] * (AMOUNT_OF_COLUMNS - len(columns)))
+        clear = True
+
+    return columns, clear
+
+
 def run_matrix():
     """
     Run the Matrix rain animation.
@@ -462,7 +521,7 @@ def run_matrix():
         None
     """
     columns = [[] for _ in range(AMOUNT_OF_COLUMNS)]  # Initialize columns.
-    count = [time.time() for _ in range(12)]  # Debounce timers for key presses.
+    count = [time.time() for _ in range(14)]  # Debounce timers for key presses.
     old_terminal_size = os.get_terminal_size().lines
     clear = True
     sys.stdout.write("\033[?25l") # Hide the cursor
@@ -471,6 +530,13 @@ def run_matrix():
     try:
         while True:
             start_time = time.time()  # Track the frame start time.
+
+            if AUTO_SIZE:
+                columns, clear = ADJUST_SIZE(columns, clear)
+
+            # Update each column.
+            columns = [update_column(column) for column in columns]
+
             rows = "\n".join(columns_to_rows(columns))
 
             clear_if_necessary(clear, old_terminal_size)
@@ -481,9 +547,6 @@ def run_matrix():
             sys.stdout.write("\033[H" + rows + "\n")
             sys.stdout.flush()
 
-            # Update each column.
-            columns = [update_column(column) for column in columns]
-
             # Process keyboard events until the frame delay has passed.
             while True:
                 if count != 'stop':  # If controls are active.
@@ -491,7 +554,7 @@ def run_matrix():
                     if check_clear:
                         clear = True
                 elif keyboard.is_pressed(RETURN_CONTROLS):
-                    count = [time.time() for _ in range(12)]
+                    count = [time.time() for _ in range(14)]
 
                 if time.time() - start_time > TIME_BETWEEN_FRAMES:
                     break
