@@ -8,6 +8,9 @@ NEW_SEQUENCE_CHANCE = 0.02
 RANDOM_CHAR_CHANGE_CHANCE = 0
 TIME_BETWEEN_FRAMES = 0.045
 
+MIN_SEQUENCE_LENGTH = 3 ######## controls, help_message, check_controls, ?
+MAX_SEQUENCE_LENGTH = 15 
+
 MIN_SEQUENCE_SPEED = 0.3 # 1/sequence_speed = frames to move the sequence; sequence_speed has a range from MIN_SEQUENCE_SPEED to 1
 
 AMOUNT_OF_COLUMNS = 150
@@ -59,6 +62,8 @@ BLUE = 'b'
 GREEN = 'g'
 RED = 'r'
 
+CHANGE_SEQ_LENGTH = 'l'
+
 CHARS_01 = '0'
 CHARS_ORIGINAL = '1'
 CHARS_ANY = '9'
@@ -97,6 +102,8 @@ HELP_MESSAGE = f'''Controls:
     {BLUE} = change color to blue
     {GREEN} = change color to green
     {RED} = change color to red
+
+    {CHANGE_SEQ_LENGTH} = set a new min and max length for sequences
               
     {CHARS_01} = change characters to "01"
     {CHARS_ORIGINAL} = reset characters to original set
@@ -108,6 +115,57 @@ HELP_MESSAGE = f'''Controls:
               
     ctrl+c = stop matrix rain
 '''
+
+
+def parse_ansi_color(ansi):
+    """
+    Parse an ANSI color escape code of the form "\033[38;2;R;G;Bm" and return the RGB tuple.
+    For the reset code ("\033[0m"), we return white (255,255,255).
+    """
+    if ansi == "\033[0m":
+        return (255, 255, 255)
+    try:
+        # Remove the "\033[" prefix and the trailing "m", then split by semicolon.
+        parts = ansi.lstrip("\033[").rstrip("m").split(";")
+        # Expecting parts like ["38", "2", "R", "G", "B"]
+        if parts[0] == "38" and parts[1] == "2" and len(parts) >= 5:
+            return (int(parts[2]), int(parts[3]), int(parts[4]))
+    except Exception:
+        pass
+    # Fallback to white if parsing fails.
+    return (255, 255, 255)
+
+
+def extend_colors(original_colors, new_length):
+    """
+    Given a list of ANSI color codes (original_colors) and a desired new length,
+    return a new list of color codes of length new_length. This function
+    uses piecewise linear interpolation on the RGB values.
+    """
+    if new_length <= len(original_colors):
+        return original_colors
+
+    extended = []
+    n = len(original_colors)
+    # For each new index, determine its position between the original colors.
+    for i in range(new_length):
+        t = i / (new_length - 1)  # Normalized [0,1]
+        # Map t to a position in the original colors list:
+        pos = t * (n - 1)
+        idx = int(pos)
+        if idx >= n - 1:
+            idx = n - 2
+            t2 = 1.0
+        else:
+            t2 = pos - idx
+
+        rgb1 = parse_ansi_color(original_colors[idx])
+        rgb2 = parse_ansi_color(original_colors[idx + 1])
+        r = int(round(rgb1[0] * (1 - t2) + rgb2[0] * t2))
+        g = int(round(rgb1[1] * (1 - t2) + rgb2[1] * t2))
+        b = int(round(rgb1[2] * (1 - t2) + rgb2[2] * t2))
+        extended.append(f"\033[38;2;{r};{g};{b}m")
+    return extended
 
 
 def make_sequence():
@@ -123,7 +181,8 @@ def make_sequence():
             - 'chars': list of characters for each color level.
             - 'cur_final_char': int index of the current final character in the sequence.
     """
-    return {'chars': [random.choice(CHARACTERS) for _ in range(len(COLORS))],
+    seq_length = random.randint(MIN_SEQUENCE_LENGTH, MAX_SEQUENCE_LENGTH)
+    return {'chars': [random.choice(CHARACTERS) for _ in range(seq_length)],
              'cur_final_char': 0,
              'speed': random.uniform(MIN_SEQUENCE_SPEED, 1)}
 
@@ -157,10 +216,18 @@ def columns_to_rows(columns):
                     break
 
             # Determine if the sequence has a character for this row.
-            if 0 <= round(sequence['cur_final_char']) - row_index < len(sequence['chars']):
-                color_index = round(sequence['cur_final_char']) - row_index
-                color = COLORS[color_index]
-                char = sequence['chars'][color_index]
+            char_index = round(sequence['cur_final_char']) - row_index
+            if 0 <= char_index < len(sequence['chars']):
+                # If the sequence length is greater than the number of COLORS,
+                # create an extended color gradient (only for this one sequence).
+                seq_len = len(sequence['chars'])
+                if seq_len > len(COLORS):
+                    colors_extended = extend_colors(COLORS, seq_len)
+                else:
+                    colors_extended = COLORS
+                # Now, using colors_extended so that the index is always in range.
+                color = colors_extended[round(len(colors_extended) * char_index / seq_len)]
+                char = sequence['chars'][char_index]
                 row += f"{color}{char}\033[0m"
             else:
                 row += ' '  # Blank if no character is visible.
@@ -262,7 +329,8 @@ def check_keyboard(count, columns):
             - clear_flag (bool): True if the terminal should be cleared due to a change.
             - If the controls have been disabled (via REMOVE_CONTROLS), the function returns ('stop', columns, clear_flag).
     """
-    global TIME_BETWEEN_FRAMES, AMOUNT_OF_COLUMNS, AMOUNT_OF_ROWS, COLORS, NEW_SEQUENCE_CHANCE, CHARACTERS, MODE, RANDOM_CHAR_CHANGE_CHANCE, AUTO_SIZE, MIN_SEQUENCE_SPEED
+    global TIME_BETWEEN_FRAMES, AMOUNT_OF_COLUMNS, AMOUNT_OF_ROWS, COLORS, NEW_SEQUENCE_CHANCE, CHARACTERS
+    global MIN_SEQUENCE_LENGTH, MAX_SEQUENCE_LENGTH, MODE, RANDOM_CHAR_CHANGE_CHANCE, AUTO_SIZE, MIN_SEQUENCE_SPEED
     cur_time = time.time()
     time_passed = [cur_time - t for t in count]
     time_used = 0
@@ -400,6 +468,33 @@ def check_keyboard(count, columns):
     if keyboard.is_pressed(CHARS_ORIGINAL):
         CHARACTERS = "ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍｦｲｸｺｿﾁﾄﾉﾌﾤﾨﾛﾝ012345789:.=*+-<>"
 
+    if keyboard.is_pressed(CHANGE_SEQ_LENGTH):
+        flush_stdin()  # Remove any pending input from the terminal.
+        print()
+        sys.stdout.write("\033[?25h")
+        sys.stdout.flush()
+        while True:
+            try:
+                min_length = int(input('New min length for sequences: '))
+                max_length = int(input('New max length for sequences: '))
+                if min_length > max_length:
+                    print("Min length can't be more than max length")
+                elif min_length <= 0 or max_length <= 0:
+                    print("Min and max length have to greater than 0")
+                elif max_length > 20:
+                    print("Max length can't exceed 20")
+                else:
+                    break
+            except ValueError:
+                print('Min and max length have to be whole numbers')
+
+        MIN_SEQUENCE_LENGTH = min_length
+        MAX_SEQUENCE_LENGTH = max_length
+
+        sys.stdout.write("\033[?25l")
+        sys.stdout.flush()
+        clear = True
+
     # Character set modification using CHARS_ANY
     if keyboard.is_pressed(CHARS_ANY):
         flush_stdin()  # Remove any pending input from the terminal.
@@ -438,6 +533,9 @@ MIN_SEQUENCE_SPEED = {round(MIN_SEQUENCE_SPEED, 4)} (1/sequence_speed = frames t
 
 AMOUNT_OF_COLUMNS = {AMOUNT_OF_COLUMNS}
 AMOUNT_OF_ROWS = {AMOUNT_OF_ROWS}
+
+MAX_SEQUENCE_LENGTH = {MAX_SEQUENCE_LENGTH}
+MIN_SEQUENCE_LENGTH = {MIN_SEQUENCE_LENGTH}
 
 MODE = {MODE} (Toggle for sequence update behavior)
 AUTO_SIZE = {AUTO_SIZE} (Toggle for automatic resizing)
