@@ -11,7 +11,8 @@ TIME_BETWEEN_FRAMES = 0.045
 MIN_SEQUENCE_LENGTH = 3 ######## controls, help_message, check_controls, ?
 MAX_SEQUENCE_LENGTH = 15 
 
-MIN_SEQUENCE_SPEED = 0.3 # 1/sequence_speed = frames to move the sequence; sequence_speed has a range from MIN_SEQUENCE_SPEED to 1
+MIN_SEQUENCE_SPEED = 0.3 # 1/sequence_speed = frames to move the sequence; sequence_speed has a range from MIN_SEQUENCE_SPEED to MAX_SEQUENCE_SPEED
+MAX_SEQUENCE_SPEED = 1
 
 AMOUNT_OF_COLUMNS = 150
 AMOUNT_OF_ROWS = 20
@@ -38,8 +39,7 @@ COLORS = [
 SPEED_UP = 'f'
 SLOW_DOWN = 's'
 
-INCREASE_SPEED_DIFF = 'shift+s'
-REDUCE_SPEED_DIFF = 'shift+f'
+CHANGE_SPEED_DIFF = 'c'
 
 PAUSE = 'p'
 MODE_CHAR = 'q'
@@ -57,7 +57,9 @@ MORE_COLUMNS = 'right'
 MORE_NEW_SEQUENCE_CHANCE = '+'
 LESS_NEW_SEQUENCE_CHANCE = '-'
 
-FIRST_WHITE = 'm'
+FIRST_BOLD = 'shift+b'
+FIRST_WHITE = 'w'
+FIRST_BRIGHT = 'shift+w'
 BLUE = 'b'
 GREEN = 'g'
 RED = 'r'
@@ -80,8 +82,7 @@ HELP_MESSAGE = f'''Controls:
     {SPEED_UP} = speed up (relative to current speed)
     {SLOW_DOWN} = slow down (relative to current speed)
 
-    {INCREASE_SPEED_DIFF} = allow some sequences to move slower (for example every 3 frames)
-    {REDUCE_SPEED_DIFF} = make all sequences move closer to once per frame
+    {CHANGE_SPEED_DIFF} = make some sequences move slower or faster (for example once every 3 frames)
 
     {PAUSE} = (un)pause
     {MODE_CHAR} = toggles if the first letter of a sequence is random and the rest follow or if the sequence remains unchanged
@@ -97,8 +98,10 @@ HELP_MESSAGE = f'''Controls:
               
     plus("{MORE_NEW_SEQUENCE_CHANCE}") = increase the chance of a new sequence starting (relative chance)
     minus("{LESS_NEW_SEQUENCE_CHANCE}") = decrease the chance of a new sequence starting (relative chance)
-              
+
+    {FIRST_BOLD} = make the first character bold
     {FIRST_WHITE} = make first character white
+    {FIRST_BRIGHT} = make first character white but in the shade of the other colors
     {BLUE} = change color to blue
     {GREEN} = change color to green
     {RED} = change color to red
@@ -127,6 +130,8 @@ def parse_ansi_color(ansi):
     try:
         # Remove the "\033[" prefix and the trailing "m", then split by semicolon.
         parts = ansi.lstrip("\033[").rstrip("m").split(";")
+        if len(parts) == 6:
+            parts.pop(0)
         # Expecting parts like ["38", "2", "R", "G", "B"]
         if parts[0] == "38" and parts[1] == "2" and len(parts) >= 5:
             return (int(parts[2]), int(parts[3]), int(parts[4]))
@@ -184,7 +189,7 @@ def make_sequence():
     seq_length = random.randint(MIN_SEQUENCE_LENGTH, MAX_SEQUENCE_LENGTH)
     return {'chars': [random.choice(CHARACTERS) for _ in range(seq_length)],
              'cur_final_char': 0,
-             'speed': random.uniform(MIN_SEQUENCE_SPEED, 1)}
+             'speed': random.uniform(MIN_SEQUENCE_SPEED, MAX_SEQUENCE_SPEED)}
 
 
 def columns_to_rows(columns):
@@ -211,12 +216,19 @@ def columns_to_rows(columns):
                 continue
 
             # Find the first sequence in the column that should be visible on this row.
-            for sequence in column:
+            for i, sequence in enumerate(column):
                 if round(sequence['cur_final_char']) >= row_index:
                     break
 
             # Determine if the sequence has a character for this row.
             char_index = round(sequence['cur_final_char']) - row_index
+            try:
+                next_sequence = column[i + 1]
+                next_sequence_char_index = round(next_sequence['cur_final_char']) - row_index
+                is_next = True
+            except:
+                is_next = False
+
             if 0 <= char_index < len(sequence['chars']):
                 # If the sequence length is greater than the number of COLORS,
                 # create an extended color gradient (only for this one sequence).
@@ -228,6 +240,19 @@ def columns_to_rows(columns):
                 # Now, using colors_extended so that the index is always in range.
                 color = colors_extended[round(len(colors_extended) * char_index / seq_len)]
                 char = sequence['chars'][char_index]
+                row += f"{color}{char}\033[0m"
+
+            elif is_next and 0 <= next_sequence_char_index < len(next_sequence['chars']):
+                # If the sequence length is greater than the number of COLORS,
+                # create an extended color gradient (only for this one sequence).
+                seq_len = len(next_sequence['chars'])
+                if seq_len > len(COLORS):
+                    colors_extended = extend_colors(COLORS, seq_len)
+                else:
+                    colors_extended = COLORS
+                # Now, using colors_extended so that the index is always in range.
+                color = colors_extended[round(len(colors_extended) * next_sequence_char_index / seq_len)]
+                char = next_sequence['chars'][char_index]
                 row += f"{color}{char}\033[0m"
             else:
                 row += ' '  # Blank if no character is visible.
@@ -330,7 +355,7 @@ def check_keyboard(count, columns):
             - If the controls have been disabled (via REMOVE_CONTROLS), the function returns ('stop', columns, clear_flag).
     """
     global TIME_BETWEEN_FRAMES, AMOUNT_OF_COLUMNS, AMOUNT_OF_ROWS, COLORS, NEW_SEQUENCE_CHANCE, CHARACTERS
-    global MIN_SEQUENCE_LENGTH, MAX_SEQUENCE_LENGTH, MODE, RANDOM_CHAR_CHANGE_CHANCE, AUTO_SIZE, MIN_SEQUENCE_SPEED
+    global MIN_SEQUENCE_LENGTH, MAX_SEQUENCE_LENGTH, MODE, RANDOM_CHAR_CHANGE_CHANCE, AUTO_SIZE, MIN_SEQUENCE_SPEED, MAX_SEQUENCE_SPEED
     cur_time = time.time()
     time_passed = [cur_time - t for t in count]
     time_used = 0
@@ -344,16 +369,6 @@ def check_keyboard(count, columns):
     if time_passed[time_used] > 0.08 and not keyboard.is_pressed('shift') and keyboard.is_pressed(SLOW_DOWN):
         count[time_used] = cur_time
         TIME_BETWEEN_FRAMES *= 1.02
-    time_used += 1
-
-    if time_passed[time_used] > 0.08 and keyboard.is_pressed(REDUCE_SPEED_DIFF):
-        count[time_used] = cur_time
-        MIN_SEQUENCE_SPEED = min(1, MIN_SEQUENCE_SPEED * 1.04)
-    time_used += 1
-
-    if time_passed[time_used] > 0.08 and keyboard.is_pressed(INCREASE_SPEED_DIFF):
-        count[time_used] = cur_time
-        MIN_SEQUENCE_SPEED = max(0.05, MIN_SEQUENCE_SPEED / 1.04)
     time_used += 1
 
     if time_passed[time_used] > 0.25 and keyboard.is_pressed(PAUSE):
@@ -414,20 +429,45 @@ def check_keyboard(count, columns):
     if time_passed[time_used] > 0.15 and keyboard.is_pressed(LESS_RANDOM_CHAR):
         count[time_used] = cur_time
         RANDOM_CHAR_CHANGE_CHANCE /= 1.05
-        if RANDOM_CHAR_CHANGE_CHANCE < 0.01:
+        if RANDOM_CHAR_CHANGE_CHANCE < 0.005:
             RANDOM_CHAR_CHANGE_CHANCE = 0
         time_used += 1
 
     if time_passed[time_used] > 0.15 and RANDOM_CHAR_CHANGE_CHANCE <= 1 and keyboard.is_pressed(MORE_RANDOM_CHAR):
         count[time_used] = cur_time
         if RANDOM_CHAR_CHANGE_CHANCE == 0:
-            RANDOM_CHAR_CHANGE_CHANCE = 0.01
+            RANDOM_CHAR_CHANGE_CHANCE = 0.005
         RANDOM_CHAR_CHANGE_CHANCE *= 1.05
-    # time_used += 1
+    time_used += 1
 
-    # Color and character set changes (not debounced)
-    if keyboard.is_pressed(FIRST_WHITE):
+    if time_passed[time_used] > 0.3 and keyboard.is_pressed(FIRST_BOLD):
+        count[time_used] = cur_time
+        parts = COLORS[0].split('[')
+
+        if parts[1][:2] == '1;':
+            parts[1] = parts[1].replace('1;', '')
+        else:
+            parts[1] = '1;' + parts[1]
+
+        COLORS[0] = '['.join(parts)
+    time_used += 1
+
+    if not keyboard.is_pressed('shift') and keyboard.is_pressed(FIRST_WHITE):
         COLORS[0] = "\033[0m"  # Reset to default white
+
+    if keyboard.is_pressed(FIRST_BRIGHT):
+        first_color = parse_ansi_color(COLORS[1])
+        r, g, b, = first_color
+
+        if r == 255 and 255 not in (g, b):
+            COLORS[0] = "\033[38;2;255;200;200m"
+
+        elif g == 255 and 255 not in (r, b):
+            COLORS[0] = "\033[38;2;200;255;200m"
+
+        elif g == 255 and b == 255 and not 255 == r:
+            COLORS[0] = "\033[38;2;225;255;255m"
+
 
     if keyboard.is_pressed(RED):
         COLORS = ["\033[38;2;255;64;64m",  # Brightest red with slight glow
@@ -451,7 +491,7 @@ def check_keyboard(count, columns):
                   "\033[38;2;0;48;0m",
                   "\033[38;2;0;16;0m"]
 
-    if keyboard.is_pressed(BLUE):
+    if not keyboard.is_pressed('shift') and keyboard.is_pressed(BLUE):
         COLORS = ["\033[38;2;64;255;255m",  # Brightest cyan with slight glow
                   "\033[38;2;0;255;255m",
                   "\033[38;2;0;208;208m",
@@ -468,6 +508,31 @@ def check_keyboard(count, columns):
     if keyboard.is_pressed(CHARS_ORIGINAL):
         CHARACTERS = "ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍｦｲｸｺｿﾁﾄﾉﾌﾤﾨﾛﾝ012345789:.=*+-<>"
 
+    if not keyboard.is_pressed('ctrl') and keyboard.is_pressed(CHANGE_SPEED_DIFF):
+        flush_stdin()  # Remove any pending input from the terminal.
+        print()
+        sys.stdout.write("\033[?25h")
+        sys.stdout.flush()
+        while True:
+            try:
+                min_speed = float(input(f'New min speed for sequences(previous: {MIN_SEQUENCE_SPEED}): '))
+                max_speed = float(input(f'New max speed for sequences(previous: {MAX_SEQUENCE_SPEED}): '))
+                if min_speed > max_speed:
+                    print("Min speed can't be more than max speed")
+                elif min_speed <= 0 or max_speed <= 0:
+                    print("Min and max speed have to greater than 0")
+                else:
+                    break
+            except ValueError:
+                print('Min and max speed have to be numbers')
+
+        MIN_SEQUENCE_SPEED = min_speed
+        MAX_SEQUENCE_SPEED = max_speed
+
+        sys.stdout.write("\033[?25l")
+        sys.stdout.flush()
+        clear = True
+
     if keyboard.is_pressed(CHANGE_SEQ_LENGTH):
         flush_stdin()  # Remove any pending input from the terminal.
         print()
@@ -475,8 +540,8 @@ def check_keyboard(count, columns):
         sys.stdout.flush()
         while True:
             try:
-                min_length = int(input('New min length for sequences: '))
-                max_length = int(input('New max length for sequences: '))
+                min_length = int(input(f'New min length for sequences(previous: {MIN_SEQUENCE_LENGTH}): '))
+                max_length = int(input(f'New max length for sequences(previous: {MAX_SEQUENCE_LENGTH}): '))
                 if min_length > max_length:
                     print("Min length can't be more than max length")
                 elif min_length <= 0 or max_length <= 0:
@@ -529,7 +594,8 @@ NEW_SEQUENCE_CHANCE = {round(NEW_SEQUENCE_CHANCE, 4)} (Chance for a column to re
 RANDOM_CHAR_CHANGE_CHANCE = {round(RANDOM_CHAR_CHANGE_CHANCE, 4)} (Chance for characters to change mid-sequence)
 
 TIME_BETWEEN_FRAMES = {round(TIME_BETWEEN_FRAMES, 4)} (Delay between frame updates)
-MIN_SEQUENCE_SPEED = {round(MIN_SEQUENCE_SPEED, 4)} (1/sequence_speed = frames to move the sequence; range(speed): MIN_SEQUENCE_SPEED to 1)
+MIN_SEQUENCE_SPEED = {round(MIN_SEQUENCE_SPEED, 4)} (1/sequence_speed = frames to move the sequence)
+MAX_SEQUENCE_SPEED = {round(MAX_SEQUENCE_SPEED, 4)} (range(speed): MIN_SEQUENCE_SPEED to MAX_SEQUENCE_SPEED))
 
 AMOUNT_OF_COLUMNS = {AMOUNT_OF_COLUMNS}
 AMOUNT_OF_ROWS = {AMOUNT_OF_ROWS}
