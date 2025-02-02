@@ -18,7 +18,7 @@ NEW_SEQUENCE_CHANCE = 0.02
 RANDOM_CHAR_CHANGE_CHANCE = 0
 TIME_BETWEEN_FRAMES = 0.045
 
-MIN_SEQUENCE_LENGTH = 3  ######## controls, help_message, check_controls, ?
+MIN_SEQUENCE_LENGTH = 3
 MAX_SEQUENCE_LENGTH = 15 
 
 MIN_SEQUENCE_SPEED = 0.3  # 1/sequence_speed = frames to move the sequence; sequence_speed has a range from MIN_SEQUENCE_SPEED to MAX_SEQUENCE_SPEED
@@ -84,6 +84,7 @@ SHOW_HELP_MESSAGE = 'h'
 CUR_VALUES = 'v'
 
 SAVE_CONFIG = 'shift+s'
+LOAD_CONFIG = 'shift+l'
 
 REMOVE_CONTROLS = 'backspace'
 RETURN_CONTROLS = 'ctrl+shift+enter'
@@ -125,6 +126,7 @@ HELP_MESSAGE = f'''Controls:
     {CHARS_ANY} = prompt for input to add or replace characters
 
     {SAVE_CONFIG} = save current values (TIME_BETWEEN_FRAMES...)
+    {LOAD_CONFIG} = load values from a file
               
     {CUR_VALUES} = display current values
     {REMOVE_CONTROLS} = disable keyboard controls temporarily
@@ -240,7 +242,7 @@ def columns_to_rows(columns, config):
                     colors_extended = config["colors"]
 
                 # Calculate color index ensuring it is within range.
-                color = colors_extended[round(len(colors_extended) * char_index / seq_len)]
+                color = colors_extended[min(len(colors_extended) - 1, round(len(colors_extended) * char_index / seq_len))]
                 char = sequence['chars'][char_index]
                 row.append(f"{color}{char}\u001b[0m")
 
@@ -253,7 +255,7 @@ def columns_to_rows(columns, config):
                     colors_extended = config["colors"]
 
                 color = colors_extended[round(len(colors_extended) * next_sequence_char_index / seq_len)]
-                char = next_sequence['chars'][char_index]
+                char = next_sequence['chars'][next_sequence_char_index]
                 row.append(f"{color}{char}\u001b[0m")
             else:
                 row.append(' ')
@@ -413,35 +415,66 @@ def check_keyboard(count, columns, config):
         flush_stdin()
         print()
         hide_or_show_cursor(show=True)
-        dont_save = False
+        load = False
         while True:
-            make_new_file = input(f'Do you want to save to a new file or update "{CONFIG_FILE}"?(new(n)/update(u)/exit(e)): ').lower().strip()
+            load_file = input(f'Do you want to save to a new file or update "{CONFIG_FILE}"?(new(n)/update(u)/exit(e)): ').lower().strip()
 
-            if make_new_file in ['exit', 'e']:
-                dont_save = True
+            if load_file in ['exit', 'e']:
+                load = True
                 break
-            elif make_new_file in ['new', 'n']:
-                make_new_file = True
+            elif load_file in ['new', 'n']:
+                load_file = True
                 break
-            elif make_new_file in ['update', 'u']:
+            elif load_file in ['update', 'u']:
                 if not config['file_is_valid']:
                     print(f"The file you have entered ({CONFIG_FILE}) isn't valid.")
                     print('Please save to a new file or exit.')
                     continue
-                make_new_file = False
+                load_file = False
                 break
             else:
                 print('Try again.')
         hide_or_show_cursor(hide=True)
 
-        if dont_save:
+        if load:
             pass
-        elif make_new_file:
+        elif load_file:
             save_config(config, update=False)
         else:
             save_config(config, update=True)
         clear = True
 
+    # load:
+    if keyboard.is_pressed(LOAD_CONFIG):
+        load = True
+        if not config['folder_is_valid']:
+            print("You have not entered a valid folder to load files from")
+            input('Press enter to continue...')
+            load = False
+        flush_stdin()
+        print()
+        hide_or_show_cursor(show=True)
+        if load:
+            file_names = [f for f in os.listdir(CONTROLS_DIR_NAME) if os.path.isfile(os.path.join(CONTROLS_DIR_NAME, f))]
+            while True:
+                load_file = input(f'Enter the name of the file you want to load or enter "exit(e)" to exit: ').strip()
+
+                if load_file.lower() in ['exit', 'e']:
+                    break
+
+                if not load_file.endswith('.json'):
+                    load_file += '.json'
+                    
+                if load_file not in file_names:
+                    print("File wasn't found.")
+                else:
+                    new_config = get_config(file_name=load_file)
+                    for key in config:
+                        config[key] = new_config[key]
+                    break
+        hide_or_show_cursor(hide=True)
+        clear = True
+    
     # first color:
     if keyboard.is_pressed(FIRST_BOLD):
         parts = config["colors"][0].split('[')
@@ -663,34 +696,45 @@ def adjust_size(columns, clear, config):
 
 
 # ______________________get_config______________________
-def get_config():
+def get_config(file_name=CONFIG_FILE, dir_name=CONTROLS_DIR_NAME):
     try:
-        file_name = CONFIG_FILE
         if file_name:
-            if not file_name.endswith(".json"):
-                file_name += ".json"
-
             try:
-                pathvalidate.validate_filename(filename=file_name)
-
-                script_dir = os.path.dirname(os.path.abspath(__file__))
-                controls_dir = os.path.join(script_dir, CONTROLS_DIR_NAME)
-                os.makedirs(controls_dir, exist_ok=True)
-                file_path = os.path.join(controls_dir, file_name)
-
-                with open(file_path, 'r', encoding="utf-8") as file:
-                    config = json.load(file)
-                    config["extended_color_cache"] = {}
-                    config['file_is_valid'] = True
-                    return config
-                
+                pathvalidate.validate_filename(filename=dir_name)
+                folder_is_valid = True
             except pathvalidate.ValidationError as e:
-                print("The file you have chosen isn't valid.")
+                folder_is_valid = False
+                print("The folder you have chosen isn't valid.")
                 print(f"{e}\n")
                 print('The global variables will be used instead.')
-                input('Press enter to continue...')
+                input('Press enter to continue...') 
+
+            if folder_is_valid:
+                if not file_name.endswith(".json"):
+                    file_name += ".json"
+
+                try:
+                    pathvalidate.validate_filename(filename=file_name)
+
+                    script_dir = os.path.dirname(os.path.abspath(__file__))
+                    controls_dir = os.path.join(script_dir, dir_name)
+                    os.makedirs(controls_dir, exist_ok=True)
+                    file_path = os.path.join(controls_dir, file_name)
+
+                    with open(file_path, 'r', encoding="utf-8") as file:
+                        config = json.load(file)
+                        config["extended_color_cache"] = {}
+                        config['file_is_valid'] = True
+                        config['folder_is_valid'] = True
+                        return config
+                    
+                except pathvalidate.ValidationError as e:
+                    print("The file you have chosen isn't valid.")
+                    print(f"{e}\n")
+                    print('The global variables will be used instead.')
+                    input('Press enter to continue...')
     except FileNotFoundError:
-        print(f'''The file "{CONFIG_FILE}" wasn't found.''')
+        print(f'''The file "{file_name}" wasn't found.''')
         print('The global variables will be used instead.')
         input('Press enter to continue...')
 
@@ -709,7 +753,8 @@ def get_config():
         "characters": CHARACTERS,
         "colors": COLORS.copy(),
         "extended_color_cache": {},
-        'file_is_valid': False
+        'file_is_valid': False,
+        'folder_is_valid': False
     }
 
 
@@ -718,6 +763,12 @@ def save_config(config, update=False):
     script_dir = os.path.dirname(os.path.abspath(__file__))
     controls_dir = os.path.join(script_dir, CONTROLS_DIR_NAME)
     os.makedirs(controls_dir, exist_ok=True)
+
+    if not config['folder_is_valid']:
+        print("The folder you have entered isn't valid.")
+        print("You won't be able to save your config")
+        input('Press enter to continue...')
+        return
 
     s_config = {}
     for key in config:
