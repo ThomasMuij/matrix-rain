@@ -3,15 +3,25 @@ import time
 import os
 import keyboard
 import sys
+import json
+import pathvalidate
 
+# if you saved your config in a file you can load it by putting the file name here
+# if you want to use the global variables, keep this variable as an emtpy string
+CONFIG_FILE = 'controls1'
+
+
+CONTROLS_DIR_NAME = 'controls' # this shouldn't be changed
+
+# Global constants (control keys, help messages, etc.) remain unchanged.
 NEW_SEQUENCE_CHANCE = 0.02
 RANDOM_CHAR_CHANGE_CHANCE = 0
 TIME_BETWEEN_FRAMES = 0.045
 
-MIN_SEQUENCE_LENGTH = 3 ######## controls, help_message, check_controls, ?
+MIN_SEQUENCE_LENGTH = 3  ######## controls, help_message, check_controls, ?
 MAX_SEQUENCE_LENGTH = 15 
 
-MIN_SEQUENCE_SPEED = 0.3 # 1/sequence_speed = frames to move the sequence; sequence_speed has a range from MIN_SEQUENCE_SPEED to MAX_SEQUENCE_SPEED
+MIN_SEQUENCE_SPEED = 0.3  # 1/sequence_speed = frames to move the sequence; sequence_speed has a range from MIN_SEQUENCE_SPEED to MAX_SEQUENCE_SPEED
 MAX_SEQUENCE_SPEED = 1
 
 AMOUNT_OF_COLUMNS = 150
@@ -24,15 +34,15 @@ CHARACTERS = "ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶ
 
 # Green gradient colors (8 shades, from brightest to darkest)
 COLORS = [
-    "\033[0m",              # White: Reset color (default terminal color)
-    "\033[38;2;0;255;0m",   # Brightest green
-    "\033[38;2;0;208;0m",   # Brighter green
-    "\033[38;2;0;176;0m",   # Bright green
-    "\033[38;2;0;144;0m",   # Medium green
-    "\033[38;2;0;112;0m",   # Slightly dark green
-    "\033[38;2;0;80;0m",    # Dark green
-    "\033[38;2;0;48;0m",    # Darker green
-    "\033[38;2;0;16;0m",    # Very dark green
+    "\u001b[0m",              # White: Reset color (default terminal color)
+    "\u001b[38;2;0;255;0m",   # Brightest green
+    "\u001b[38;2;0;208;0m",   # Brighter green
+    "\u001b[38;2;0;176;0m",   # Bright green
+    "\u001b[38;2;0;144;0m",   # Medium green
+    "\u001b[38;2;0;112;0m",   # Slightly dark green
+    "\u001b[38;2;0;80;0m",    # Dark green
+    "\u001b[38;2;0;48;0m",    # Darker green
+    "\u001b[38;2;0;16;0m"    # Very dark green
 ]
 
 # Control key assignments:
@@ -73,12 +83,14 @@ CHARS_ANY = '9'
 SHOW_HELP_MESSAGE = 'h'
 CUR_VALUES = 'v'
 
+SAVE_CONFIG = 'shift+s'
+
 REMOVE_CONTROLS = 'backspace'
 RETURN_CONTROLS = 'ctrl+shift+enter'
 
 HELP_MESSAGE = f'''Controls:
     up --> arrow up,...
-    
+
     {SPEED_UP} = speed up (relative to current speed)
     {SLOW_DOWN} = slow down (relative to current speed)
 
@@ -111,6 +123,8 @@ HELP_MESSAGE = f'''Controls:
     {CHARS_01} = change characters to "01"
     {CHARS_ORIGINAL} = reset characters to original set
     {CHARS_ANY} = prompt for input to add or replace characters
+
+    {SAVE_CONFIG} = save current values (TIME_BETWEEN_FRAMES...)
               
     {CUR_VALUES} = display current values
     {REMOVE_CONTROLS} = disable keyboard controls temporarily
@@ -120,257 +134,204 @@ HELP_MESSAGE = f'''Controls:
 '''
 
 
+# ______________________parse_ansi_color______________________
 def parse_ansi_color(ansi):
     """
-    Parse an ANSI color escape code of the form "\033[38;2;R;G;Bm" and return the RGB tuple.
-    For the reset code ("\033[0m"), we return white (255,255,255).
+    Parse an ANSI color escape code of the form "\u001b[38;2;R;G;Bm" and return the RGB tuple.
+    For the reset code ("\u001b[0m"), we return white (255,255,255).
     """
-    if ansi == "\033[0m":
+    if ansi == "\u001b[0m":
         return (255, 255, 255)
     try:
-        # Remove the "\033[" prefix and the trailing "m", then split by semicolon.
-        parts = ansi.lstrip("\033[").rstrip("m").split(";")
+        parts = ansi.lstrip("\u001b[").rstrip("m").split(";")
         if len(parts) == 6:
             parts.pop(0)
-        # Expecting parts like ["38", "2", "R", "G", "B"]
         if parts[0] == "38" and parts[1] == "2" and len(parts) >= 5:
             return (int(parts[2]), int(parts[3]), int(parts[4]))
     except Exception:
         pass
-    # Fallback to white if parsing fails.
     return (255, 255, 255)
 
 
-def extend_colors(original_colors, new_length):
+# ______________________extend_colors______________________
+def extend_colors(original_colors, new_length, config):
     """
-    Given a list of ANSI color codes (original_colors) and a desired new length,
-    return a new list of color codes of length new_length. This function
-    uses piecewise linear interpolation on the RGB values.
+    Return a color gradient of new_length using linear interpolation.
+    Uses caching stored in config["extended_color_cache"].
     """
+    key = (tuple(original_colors), new_length)
+    if key in config["extended_color_cache"]:
+        return config["extended_color_cache"][key]
+    
     if new_length <= len(original_colors):
+        config["extended_color_cache"][key] = original_colors
         return original_colors
 
     extended = []
     n = len(original_colors)
-    # For each new index, determine its position between the original colors.
     for i in range(new_length):
-        t = i / (new_length - 1)  # Normalized [0,1]
-        # Map t to a position in the original colors list:
+        t = i / (new_length - 1)
         pos = t * (n - 1)
         idx = int(pos)
-        if idx >= n - 1:
-            idx = n - 2
-            t2 = 1.0
-        else:
-            t2 = pos - idx
-
+        t2 = pos - idx if idx < n - 1 else 1.0
         rgb1 = parse_ansi_color(original_colors[idx])
-        rgb2 = parse_ansi_color(original_colors[idx + 1])
+        rgb2 = parse_ansi_color(original_colors[min(idx + 1, n - 1)])
         r = int(round(rgb1[0] * (1 - t2) + rgb2[0] * t2))
         g = int(round(rgb1[1] * (1 - t2) + rgb2[1] * t2))
         b = int(round(rgb1[2] * (1 - t2) + rgb2[2] * t2))
-        extended.append(f"\033[38;2;{r};{g};{b}m")
+        extended.append(f"\u001b[38;2;{r};{g};{b}m")
+    config["extended_color_cache"][key] = extended
     return extended
 
 
-def make_sequence():
+# ______________________hide_or_show_cursor______________________
+def hide_or_show_cursor(hide=False, show=False):
+    if hide:
+        sys.stdout.write("\u001b[?25l")
+    elif show:
+        sys.stdout.write("\u001b[?25h")
+
+
+# ______________________make_sequence______________________
+def make_sequence(config):
     """
-    Create a new sequence for a column.
-
-    This function creates a dictionary representing a new falling sequence. The dictionary
-    contains a list of random characters (one for each color level) and initializes the
-    current final character index to 0.
-
-    Returns:
-        dict: A dictionary with the following keys:
-            - 'chars': list of characters for each color level.
-            - 'cur_final_char': int index of the current final character in the sequence.
+    Create a new sequence for a column using parameters from config.
     """
-    seq_length = random.randint(MIN_SEQUENCE_LENGTH, MAX_SEQUENCE_LENGTH)
-    return {'chars': [random.choice(CHARACTERS) for _ in range(seq_length)],
-             'cur_final_char': 0,
-             'speed': random.uniform(MIN_SEQUENCE_SPEED, MAX_SEQUENCE_SPEED)}
+    seq_length = random.randint(config["min_sequence_length"], config["max_sequence_length"])
+    return {'chars': [random.choice(config["characters"]) for _ in range(seq_length)],
+            'cur_final_char': 0,
+            'speed': random.uniform(config["min_sequence_speed"], config["max_sequence_speed"])}
 
 
-def columns_to_rows(columns):
+# ______________________columns_to_rows______________________
+def columns_to_rows(columns, config):
     """
     Convert columns of sequences into rows for terminal display.
-
-    This function iterates over each row index and then over each column. For each column,
-    it finds the sequence whose 'cur_final_char' is at or beyond the current row and uses it
-    to determine which character (and color) to display. If no sequence is present in a column
-    for a given row, a blank space is used.
-
-    Args:
-        columns (list): List of columns, where each column is a list of sequence dictionaries.
-
-    Returns:
-        list: A list of strings, each representing one row of output for display.
     """
     rows = []
-    for row_index in range(AMOUNT_OF_ROWS):
-        row = ''
+    for row_index in range(config["amount_of_rows"]):
+        row = []
         for column in columns:
-            if not column:  # Column is empty; display blank space.
-                row += ' '
+            if not column:
+                row.append(' ')
                 continue
 
-            # Find the first sequence in the column that should be visible on this row.
+            # Find the first sequence that should be visible on this row.
             for i, sequence in enumerate(column):
-                if round(sequence['cur_final_char']) >= row_index:
+                cur_final_char = int(sequence['cur_final_char'] + 0.5)
+                if cur_final_char >= row_index:
                     break
 
-            # Determine if the sequence has a character for this row.
-            char_index = round(sequence['cur_final_char']) - row_index
+            # Determine if there is a "next" sequence.
+            char_index = cur_final_char - row_index
             try:
                 next_sequence = column[i + 1]
-                next_sequence_char_index = round(next_sequence['cur_final_char']) - row_index
+                next_sequence_char_index = int(next_sequence['cur_final_char'] + 0.5) - row_index
                 is_next = True
-            except:
+            except Exception:
                 is_next = False
 
             if 0 <= char_index < len(sequence['chars']):
-                # If the sequence length is greater than the number of COLORS,
-                # create an extended color gradient (only for this one sequence).
                 seq_len = len(sequence['chars'])
-                if seq_len > len(COLORS):
-                    colors_extended = extend_colors(COLORS, seq_len)
+
+                if seq_len > len(config["colors"]):
+                    colors_extended = extend_colors(config["colors"], seq_len, config)
                 else:
-                    colors_extended = COLORS
-                # Now, using colors_extended so that the index is always in range.
+                    colors_extended = config["colors"]
+
+                # Calculate color index ensuring it is within range.
                 color = colors_extended[round(len(colors_extended) * char_index / seq_len)]
                 char = sequence['chars'][char_index]
-                row += f"{color}{char}\033[0m"
+                row.append(f"{color}{char}\u001b[0m")
 
             elif is_next and 0 <= next_sequence_char_index < len(next_sequence['chars']):
-                # If the sequence length is greater than the number of COLORS,
-                # create an extended color gradient (only for this one sequence).
                 seq_len = len(next_sequence['chars'])
-                if seq_len > len(COLORS):
-                    colors_extended = extend_colors(COLORS, seq_len)
+
+                if seq_len > len(config["colors"]):
+                    colors_extended = extend_colors(config["colors"], seq_len, config)
                 else:
-                    colors_extended = COLORS
-                # Now, using colors_extended so that the index is always in range.
+                    colors_extended = config["colors"]
+
                 color = colors_extended[round(len(colors_extended) * next_sequence_char_index / seq_len)]
                 char = next_sequence['chars'][char_index]
-                row += f"{color}{char}\033[0m"
+                row.append(f"{color}{char}\u001b[0m")
             else:
-                row += ' '  # Blank if no character is visible.
-        rows.append(row)
+                row.append(' ')
+        rows.append(''.join(row))
     return rows
 
 
-def update_column(column):
+# ______________________update_column______________________
+def update_column(column, config):
     """
-    Update a single column of sequences.
-    
-    For each sequence in the column, update its character sequence (shifting or randomly changing
-    characters as appropriate) and increment its 'cur_final_char' counter. Remove sequences that have
-    fallen beyond the display area. Additionally, with some probability, start a new sequence at the top
-    of the column if the conditions are met.
-    
-    Args:
-        column (list): A list of sequence dictionaries representing the current sequences in a column.
-    
-    Returns:
-        list: The updated (and sorted) list of sequences for the column.
+    Update a single column of sequences using config.
     """
     new_column = []
-    
-    # If the column is empty, possibly start a new sequence.
     if len(column) == 0:
-        return [make_sequence()] if random.random() < NEW_SEQUENCE_CHANCE else []
+        return [make_sequence(config)] if random.random() < config["new_sequence_chance"] else []
     
-    # Update each sequence.
     for sequence in column:
-        if MODE:
-            # Shift the sequence: remove the last char and insert a new random char at the beginning.
-            if round(sequence['cur_final_char']) != round(sequence['cur_final_char'] + sequence['speed']):
+        if config["mode"]:
+            # Shift the sequence.
+            if int(sequence['cur_final_char'] + 0.5) != int(sequence['cur_final_char'] + sequence['speed'] + 0.5):
                 sequence['chars'].pop()
-                sequence['chars'].insert(0, random.choice(CHARACTERS))
+                sequence['chars'].insert(0, random.choice(config["characters"]))
         
-        if RANDOM_CHAR_CHANGE_CHANCE:
-            # For each character, possibly change it based on the random chance.
-            for char_index in range(len(sequence['chars'])):
-                if random.random() < RANDOM_CHAR_CHANGE_CHANCE:
-                    sequence['chars'][char_index] = random.choice(CHARACTERS)
+        if config["random_char_change_chance"]:
+            for idx in range(len(sequence['chars'])):
+                if random.random() < config["random_char_change_chance"]:
+                    sequence['chars'][idx] = random.choice(config["characters"])
         
-        # Increment the sequence's position.
         sequence['cur_final_char'] += sequence['speed']
         
-        # Keep sequences that are still within the visible range.
-        if sequence['cur_final_char'] <= (AMOUNT_OF_ROWS + len(sequence['chars'])):
+        if sequence['cur_final_char'] <= (config["amount_of_rows"] + len(sequence['chars'])):
             new_column.append(sequence)
     
-    # Sort the column so that the sequence with the lowest cur_final_char is at the front.
     new_column.sort(key=lambda seq: seq['cur_final_char'])
-    
-    # Possibly add a new sequence at the top of the column.
     if new_column:
         first_sequence = new_column[0]
-        if first_sequence['cur_final_char'] >= len(COLORS) and random.random() < NEW_SEQUENCE_CHANCE:
-            new_column.insert(0, make_sequence())
-        
+        if first_sequence['cur_final_char'] >= len(config["colors"]) and random.random() < config["new_sequence_chance"]:
+            new_column.insert(0, make_sequence(config))
     return new_column
 
 
+# ______________________flush_stdin______________________
 def flush_stdin():
     """
     Flush the standard input buffer.
-
-    This function clears any buffered input from the terminal. On Windows, it uses the msvcrt module;
-    on Unix-like systems, it uses the termios module.
-
-    Note:
-        On Windows, ensure that the msvcrt module is available.
     """
     if os.name == 'nt':
-        # Windows: Drain any pending keystrokes.
         import msvcrt
         while msvcrt.kbhit():
             msvcrt.getch()
     else:
-        # Unix-like systems: Flush the input buffer.
         import termios
         termios.tcflush(sys.stdin, termios.TCIFLUSH)
 
 
-def check_keyboard(count, columns):
+# ______________________check_keyboard______________________
+def check_keyboard(count, columns, config):
     """
-    Check keyboard input and update global settings and column data accordingly.
-
-    This function uses the keyboard module to detect key presses and adjusts variables such as
-    animation speed, mode, display dimensions, colors, and the character set. It also manages debouncing
-    using a list of timestamps.
-
-    Args:
-        count (list): A list of timestamps used to debounce keypress events.
-        columns (list): The current list of columns for the matrix rain.
-
-    Returns:
-        tuple: A tuple (updated_count, updated_columns, clear_flag) where:
-            - updated_count: The possibly updated list of timestamps.
-            - updated_columns: The possibly updated list of columns.
-            - clear_flag (bool): True if the terminal should be cleared due to a change.
-            - If the controls have been disabled (via REMOVE_CONTROLS), the function returns ('stop', columns, clear_flag).
+    Check keyboard input and update config (and column data) accordingly.
+    Returns (updated_count, updated_columns, clear_flag) or ('stop', columns, clear_flag) if controls are disabled.
     """
-    global TIME_BETWEEN_FRAMES, AMOUNT_OF_COLUMNS, AMOUNT_OF_ROWS, COLORS, NEW_SEQUENCE_CHANCE, CHARACTERS
-    global MIN_SEQUENCE_LENGTH, MAX_SEQUENCE_LENGTH, MODE, RANDOM_CHAR_CHANGE_CHANCE, AUTO_SIZE, MIN_SEQUENCE_SPEED, MAX_SEQUENCE_SPEED
     cur_time = time.time()
     time_passed = [cur_time - t for t in count]
     time_used = 0
     clear = False
 
+    # speed:
     if time_passed[time_used] > 0.08 and not keyboard.is_pressed('shift') and keyboard.is_pressed(SPEED_UP):
         count[time_used] = cur_time
-        TIME_BETWEEN_FRAMES /= 1.02
+        config["time_between_frames"] /= 1.02
     time_used += 1
 
     if time_passed[time_used] > 0.08 and not keyboard.is_pressed('shift') and keyboard.is_pressed(SLOW_DOWN):
         count[time_used] = cur_time
-        TIME_BETWEEN_FRAMES *= 1.02
+        config["time_between_frames"] *= 1.02
     time_used += 1
 
+    # pause:
     if time_passed[time_used] > 0.25 and keyboard.is_pressed(PAUSE):
         time.sleep(0.25)
         while True:
@@ -380,192 +341,174 @@ def check_keyboard(count, columns):
                 break
     time_used += 1
 
+    # mode:
     if time_passed[time_used] > 0.3 and keyboard.is_pressed(MODE_CHAR):
         count[time_used] = cur_time
-        MODE = not MODE
+        config["mode"] = not config["mode"]
     time_used += 1
 
+    # auto size:
     if time_passed[time_used] > 0.3 and keyboard.is_pressed(AUTO_SIZE_CHAR):
         count[time_used] = cur_time
-        AUTO_SIZE = not AUTO_SIZE
+        config["auto_size"] = not config["auto_size"]
     time_used += 1
 
-    if time_passed[time_used] > 0.09 and AMOUNT_OF_ROWS > 0 and not keyboard.is_pressed('shift') and keyboard.is_pressed(SHORTEN_LENGTH):
+    # rows:
+    if time_passed[time_used] > 0.09 and config["amount_of_rows"] > 0 and not keyboard.is_pressed('shift') and keyboard.is_pressed(SHORTEN_LENGTH):
         count[time_used] = cur_time
-        AMOUNT_OF_ROWS -= 1
+        config["amount_of_rows"] -= 1
         clear = True
     time_used += 1
 
-    if time_passed[time_used] > 0.09 and AMOUNT_OF_ROWS < 80 and not keyboard.is_pressed('shift') and keyboard.is_pressed(INCREASE_LENGTH):
+    if time_passed[time_used] > 0.09 and config["amount_of_rows"] < 80 and not keyboard.is_pressed('shift') and keyboard.is_pressed(INCREASE_LENGTH):
         count[time_used] = cur_time
-        AMOUNT_OF_ROWS += 1
+        config["amount_of_rows"] += 1
         clear = True
     time_used += 1
 
-    if time_passed[time_used] > 0.05 and AMOUNT_OF_COLUMNS > 0 and keyboard.is_pressed(LESS_COLUMNS):
+    # columns:
+    if time_passed[time_used] > 0.05 and config["amount_of_columns"] > 0 and keyboard.is_pressed(LESS_COLUMNS):
         count[time_used] = cur_time
-        AMOUNT_OF_COLUMNS -= 1
-        columns.pop(-1)
+        config["amount_of_columns"] -= 1
+        if columns:
+            columns.pop(-1)
         clear = True
     time_used += 1
 
-    if time_passed[time_used] > 0.05 and AMOUNT_OF_COLUMNS < 200 and keyboard.is_pressed(MORE_COLUMNS):
+    if time_passed[time_used] > 0.05 and config["amount_of_columns"] < 200 and keyboard.is_pressed(MORE_COLUMNS):
         count[time_used] = cur_time
-        AMOUNT_OF_COLUMNS += 1
+        config["amount_of_columns"] += 1
         columns.append([])
         clear = True
     time_used += 1
 
+    # sequence chance:
     if time_passed[time_used] > 0.1 and keyboard.is_pressed(LESS_NEW_SEQUENCE_CHANCE):
         count[time_used] = cur_time
-        NEW_SEQUENCE_CHANCE /= 1.03
+        config["new_sequence_chance"] /= 1.03
     time_used += 1
 
-    if time_passed[time_used] > 0.1 and NEW_SEQUENCE_CHANCE <= 1 and (keyboard.is_pressed('=+shift') or keyboard.is_pressed(MORE_NEW_SEQUENCE_CHANCE)):
+    if time_passed[time_used] > 0.1 and config["new_sequence_chance"] <= 1 and (keyboard.is_pressed('=+shift') or keyboard.is_pressed(MORE_NEW_SEQUENCE_CHANCE)):
         count[time_used] = cur_time
-        NEW_SEQUENCE_CHANCE *= 1.03
+        config["new_sequence_chance"] *= 1.03
     time_used += 1
 
+    # random char change:
     if time_passed[time_used] > 0.15 and keyboard.is_pressed(LESS_RANDOM_CHAR):
         count[time_used] = cur_time
-        RANDOM_CHAR_CHANGE_CHANCE /= 1.05
-        if RANDOM_CHAR_CHANGE_CHANCE < 0.005:
-            RANDOM_CHAR_CHANGE_CHANCE = 0
+        config["random_char_change_chance"] /= 1.05
+        if config["random_char_change_chance"] < 0.005:
+            config["random_char_change_chance"] = 0
         time_used += 1
 
-    if time_passed[time_used] > 0.15 and RANDOM_CHAR_CHANGE_CHANCE <= 1 and keyboard.is_pressed(MORE_RANDOM_CHAR):
+    if time_passed[time_used] > 0.15 and config["random_char_change_chance"] <= 1 and keyboard.is_pressed(MORE_RANDOM_CHAR):
         count[time_used] = cur_time
-        if RANDOM_CHAR_CHANGE_CHANCE == 0:
-            RANDOM_CHAR_CHANGE_CHANCE = 0.005
-        RANDOM_CHAR_CHANGE_CHANCE *= 1.05
+        if config["random_char_change_chance"] == 0:
+            config["random_char_change_chance"] = 0.005
+        config["random_char_change_chance"] *= 1.05
     time_used += 1
 
-    if time_passed[time_used] > 0.3 and keyboard.is_pressed(FIRST_BOLD):
-        count[time_used] = cur_time
-        parts = COLORS[0].split('[')
+    # save:
+    if keyboard.is_pressed(SAVE_CONFIG):
+        flush_stdin()
+        print()
+        hide_or_show_cursor(show=True)
+        dont_save = False
+        while True:
+            make_new_file = input(f'Do you want to save to a new file or update "{CONFIG_FILE}"?(new(n)/update(u)/exit(e)): ').lower().strip()
 
+            if make_new_file in ['exit', 'e']:
+                dont_save = True
+                break
+            elif make_new_file in ['new', 'n']:
+                make_new_file = True
+                break
+            elif make_new_file in ['update', 'u']:
+                if not config['file_is_valid']:
+                    print(f"The file you have entered ({CONFIG_FILE}) isn't valid.")
+                    print('Please save to a new file or exit.')
+                    continue
+                make_new_file = False
+                break
+            else:
+                print('Try again.')
+        hide_or_show_cursor(hide=True)
+
+        if dont_save:
+            pass
+        elif make_new_file:
+            save_config(config, update=False)
+        else:
+            save_config(config, update=True)
+        clear = True
+
+    # first color:
+    if keyboard.is_pressed(FIRST_BOLD):
+        parts = config["colors"][0].split('[')
         if parts[1][:2] == '1;':
-            parts[1] = parts[1].replace('1;', '')
+            pass
         else:
             parts[1] = '1;' + parts[1]
-
-        COLORS[0] = '['.join(parts)
-    time_used += 1
+        config["colors"][0] = '['.join(parts)
 
     if not keyboard.is_pressed('shift') and keyboard.is_pressed(FIRST_WHITE):
-        COLORS[0] = "\033[0m"  # Reset to default white
+        config["colors"][0] = "\u001b[0m"  # Reset to default white
 
     if keyboard.is_pressed(FIRST_BRIGHT):
-        first_color = parse_ansi_color(COLORS[1])
-        r, g, b, = first_color
-
+        first_color = parse_ansi_color(config["colors"][1])
+        r, g, b = first_color
         if r == 255 and 255 not in (g, b):
-            COLORS[0] = "\033[38;2;255;200;200m"
-
+            config["colors"][0] = "\u001b[38;2;255;190;190m"
         elif g == 255 and 255 not in (r, b):
-            COLORS[0] = "\033[38;2;200;255;200m"
+            config["colors"][0] = "\u001b[38;2;210;255;210m"
+        elif g == 255 and b == 255 and r != 255:
+            config["colors"][0] = "\u001b[38;2;225;255;255m"
 
-        elif g == 255 and b == 255 and not 255 == r:
-            COLORS[0] = "\033[38;2;225;255;255m"
-
-
+    # colors
     if keyboard.is_pressed(RED):
-        COLORS = ["\033[38;2;255;64;64m",  # Brightest red with slight glow
-                  "\033[38;2;255;0;0m",
-                  "\033[38;2;240;0;0m",
-                  "\033[38;2;224;0;0m",
-                  "\033[38;2;208;0;0m",
-                  "\033[38;2;192;0;0m",
-                  "\033[38;2;176;0;0m",
-                  "\033[38;2;160;0;0m",
-                  "\033[38;2;144;0;0m"]
+        config["colors"] = ["\u001b[38;2;255;64;64m",
+                         "\u001b[38;2;255;0;0m",
+                         "\u001b[38;2;240;0;0m",
+                         "\u001b[38;2;224;0;0m",
+                         "\u001b[38;2;208;0;0m",
+                         "\u001b[38;2;192;0;0m",
+                         "\u001b[38;2;176;0;0m",
+                         "\u001b[38;2;160;0;0m",
+                         "\u001b[38;2;144;0;0m"]
 
     if keyboard.is_pressed(GREEN):
-        COLORS = ["\033[38;2;64;255;64m",  # Brightest green with slight glow
-                  "\033[38;2;0;255;0m",
-                  "\033[38;2;0;208;0m",
-                  "\033[38;2;0;176;0m",
-                  "\033[38;2;0;144;0m",
-                  "\033[38;2;0;112;0m",
-                  "\033[38;2;0;80;0m",
-                  "\033[38;2;0;48;0m",
-                  "\033[38;2;0;16;0m"]
+        config["colors"] = ["\u001b[38;2;64;255;64m",
+                         "\u001b[38;2;0;255;0m",
+                         "\u001b[38;2;0;208;0m",
+                         "\u001b[38;2;0;176;0m",
+                         "\u001b[38;2;0;144;0m",
+                         "\u001b[38;2;0;112;0m",
+                         "\u001b[38;2;0;80;0m",
+                         "\u001b[38;2;0;48;0m",
+                         "\u001b[38;2;0;16;0m"]
 
     if not keyboard.is_pressed('shift') and keyboard.is_pressed(BLUE):
-        COLORS = ["\033[38;2;64;255;255m",  # Brightest cyan with slight glow
-                  "\033[38;2;0;255;255m",
-                  "\033[38;2;0;208;208m",
-                  "\033[38;2;0;176;176m",
-                  "\033[38;2;0;144;144m",
-                  "\033[38;2;0;112;112m",
-                  "\033[38;2;0;80;80m",
-                  "\033[38;2;0;48;48m",
-                  "\033[38;2;0;16;16m"]
+        config["colors"] = ["\u001b[38;2;64;255;255m",
+                         "\u001b[38;2;0;255;255m",
+                         "\u001b[38;2;0;208;208m",
+                         "\u001b[38;2;0;176;176m",
+                         "\u001b[38;2;0;144;144m",
+                         "\u001b[38;2;0;112;112m",
+                         "\u001b[38;2;0;80;80m",
+                         "\u001b[38;2;0;48;48m",
+                         "\u001b[38;2;0;16;16m"]
 
+    # characters:
     if keyboard.is_pressed(CHARS_01):
-        CHARACTERS = '01'
+        config["characters"] = '01'
 
     if keyboard.is_pressed(CHARS_ORIGINAL):
-        CHARACTERS = "ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍｦｲｸｺｿﾁﾄﾉﾌﾤﾨﾛﾝ012345789:.=*+-<>"
+        config["characters"] = "ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍｦｲｸｺｿﾁﾄﾉﾌﾤﾨﾛﾝ012345789:.=*+-<>"
 
-    if not keyboard.is_pressed('ctrl') and keyboard.is_pressed(CHANGE_SPEED_DIFF):
-        flush_stdin()  # Remove any pending input from the terminal.
-        print()
-        sys.stdout.write("\033[?25h")
-        sys.stdout.flush()
-        while True:
-            try:
-                min_speed = float(input(f'New min speed for sequences(previous: {MIN_SEQUENCE_SPEED}): '))
-                max_speed = float(input(f'New max speed for sequences(previous: {MAX_SEQUENCE_SPEED}): '))
-                if min_speed > max_speed:
-                    print("Min speed can't be more than max speed")
-                elif min_speed <= 0 or max_speed <= 0:
-                    print("Min and max speed have to greater than 0")
-                else:
-                    break
-            except ValueError:
-                print('Min and max speed have to be numbers')
-
-        MIN_SEQUENCE_SPEED = min_speed
-        MAX_SEQUENCE_SPEED = max_speed
-
-        sys.stdout.write("\033[?25l")
-        sys.stdout.flush()
-        clear = True
-
-    if keyboard.is_pressed(CHANGE_SEQ_LENGTH):
-        flush_stdin()  # Remove any pending input from the terminal.
-        print()
-        sys.stdout.write("\033[?25h")
-        sys.stdout.flush()
-        while True:
-            try:
-                min_length = int(input(f'New min length for sequences(previous: {MIN_SEQUENCE_LENGTH}): '))
-                max_length = int(input(f'New max length for sequences(previous: {MAX_SEQUENCE_LENGTH}): '))
-                if min_length > max_length:
-                    print("Min length can't be more than max length")
-                elif min_length <= 0 or max_length <= 0:
-                    print("Min and max length have to greater than 0")
-                elif max_length > 20:
-                    print("Max length can't exceed 20")
-                else:
-                    break
-            except ValueError:
-                print('Min and max length have to be whole numbers')
-
-        MIN_SEQUENCE_LENGTH = min_length
-        MAX_SEQUENCE_LENGTH = max_length
-
-        sys.stdout.write("\033[?25l")
-        sys.stdout.flush()
-        clear = True
-
-    # Character set modification using CHARS_ANY
     if keyboard.is_pressed(CHARS_ANY):
-        flush_stdin()  # Remove any pending input from the terminal.
+        flush_stdin()
         print()
-        sys.stdout.write("\033[?25h")
-        sys.stdout.flush()
+        hide_or_show_cursor(show=True)
         while True:
             chars = input('Characters: ')
             if len(chars) > 100:
@@ -576,38 +519,87 @@ def check_keyboard(count, columns):
                 if add in ["a", "r"]:
                     break
             if add == 'a':
-                if len(chars + CHARACTERS) > 100:
+                if len(chars + config["characters"]) > 100:
                     print('Sorry that would result in too many characters')
                     continue
-                CHARACTERS += chars
+                config["characters"] += chars
             elif add == 'r':
-                CHARACTERS = chars if chars else ' '
+                config["characters"] = chars if chars else ' '
             break
-        sys.stdout.write("\033[?25l")
-        sys.stdout.flush()
+        
+        hide_or_show_cursor(hide=True)
         clear = True
 
+    # sequence speed:
+    if not keyboard.is_pressed('ctrl') and keyboard.is_pressed(CHANGE_SPEED_DIFF):
+        flush_stdin()
+        print()
+        hide_or_show_cursor(show=True)
+        while True:
+            try:
+                min_speed = float(input(f'New min speed for sequences (previous: {config["min_sequence_speed"]}): '))
+                max_speed = float(input(f'New max speed for sequences (previous: {config["max_sequence_speed"]}): '))
+                if min_speed > max_speed:
+                    print("Min speed can't be more than max speed")
+                elif min_speed <= 0 or max_speed <= 0:
+                    print("Min and max speed have to be greater than 0")
+                else:
+                    break
+            except ValueError:
+                print('Min and max speed have to be numbers')
+
+        config["min_sequence_speed"] = min_speed
+        config["max_sequence_speed"] = max_speed
+        hide_or_show_cursor(hide=True)
+        clear = True
+
+    # sequence length:
+    if keyboard.is_pressed(CHANGE_SEQ_LENGTH):
+        flush_stdin()
+        print()
+        hide_or_show_cursor(show=True)
+        while True:
+            try:
+                min_length = int(input(f'New min length for sequences (previous: {config["min_sequence_length"]}): '))
+                max_length = int(input(f'New max length for sequences (previous: {config["max_sequence_length"]}): '))
+                if min_length > max_length:
+                    print("Min length can't be more than max length")
+                elif min_length <= 0 or max_length <= 0:
+                    print("Min and max length have to be greater than 0")
+                elif max_length > 30:
+                    print("Max length can't exceed 30")
+                else:
+                    break
+            except ValueError:
+                print('Min and max length have to be whole numbers')
+
+        config["min_sequence_length"] = min_length
+        config["max_sequence_length"] = max_length
+        hide_or_show_cursor(hide=True)
+        clear = True
+
+    # print info:
     if keyboard.is_pressed(CUR_VALUES):
         flush_stdin()
         print(f'''
-NEW_SEQUENCE_CHANCE = {round(NEW_SEQUENCE_CHANCE, 4)} (Chance for a column to reset when empty; range: 0 to 1)
-RANDOM_CHAR_CHANGE_CHANCE = {round(RANDOM_CHAR_CHANGE_CHANCE, 4)} (Chance for characters to change mid-sequence)
+NEW_SEQUENCE_CHANCE = {round(config["new_sequence_chance"], 4)} (Chance for a column to reset when empty; range: 0 to 1)
+RANDOM_CHAR_CHANGE_CHANCE = {round(config["random_char_change_chance"], 4)} (Chance for characters to change mid-sequence)
 
-TIME_BETWEEN_FRAMES = {round(TIME_BETWEEN_FRAMES, 4)} (Delay between frame updates)
-MIN_SEQUENCE_SPEED = {round(MIN_SEQUENCE_SPEED, 4)} (1/sequence_speed = frames to move the sequence)
-MAX_SEQUENCE_SPEED = {round(MAX_SEQUENCE_SPEED, 4)} (range(speed): MIN_SEQUENCE_SPEED to MAX_SEQUENCE_SPEED))
+TIME_BETWEEN_FRAMES = {round(config["time_between_frames"], 4)} (Delay between frame updates)
+MIN_SEQUENCE_SPEED = {round(config["min_sequence_speed"], 4)} (1/sequence_speed = frames to move the sequence)
+MAX_SEQUENCE_SPEED = {round(config["max_sequence_speed"], 4)} (range(speed): MIN_SEQUENCE_SPEED to MAX_SEQUENCE_SPEED)
 
-AMOUNT_OF_COLUMNS = {AMOUNT_OF_COLUMNS}
-AMOUNT_OF_ROWS = {AMOUNT_OF_ROWS}
+AMOUNT_OF_COLUMNS = {config["amount_of_columns"]}
+AMOUNT_OF_ROWS = {config["amount_of_rows"]}
 
-MAX_SEQUENCE_LENGTH = {MAX_SEQUENCE_LENGTH}
-MIN_SEQUENCE_LENGTH = {MIN_SEQUENCE_LENGTH}
+MAX_SEQUENCE_LENGTH = {config["max_sequence_length"]}
+MIN_SEQUENCE_LENGTH = {config["min_sequence_length"]}
 
-MODE = {MODE} (Toggle for sequence update behavior)
-AUTO_SIZE = {AUTO_SIZE} (Toggle for automatic resizing)
+MODE = {config["mode"]} (Toggle for sequence update behavior)
+AUTO_SIZE = {config["auto_size"]} (Toggle for automatic resizing)
 
-CHARACTERS = {CHARACTERS}
-COLORS = {COLORS}
+CHARACTERS = {config["characters"]}
+COLORS = {config["colors"]}
 ''')
         input('Press enter to continue...')
         clear = True
@@ -619,6 +611,7 @@ COLORS = {COLORS}
         input('Press enter to continue...')
         clear = True
 
+    # remove controls:
     if keyboard.is_pressed(REMOVE_CONTROLS):
         return 'stop', columns, clear
 
@@ -626,108 +619,227 @@ COLORS = {COLORS}
     return count, columns, clear
 
 
-def clear_if_necessary(clear, old_terminal_size):
+# ______________________clear_if_necessary______________________
+def clear_if_necessary(clear, old_terminal_size, config):
     """
     Clear the terminal screen if necessary.
-
-    This function checks if the terminal size has changed or if a control event has flagged a clear.
-    If so, it clears the screen using the appropriate command for the operating system.
-
-    Args:
-        clear (bool): Flag indicating whether a clear is requested.
-        old_terminal_size (int): The previous terminal size (number of lines).
-
-    Returns:
-        None
     """
-    if old_terminal_size != os.get_terminal_size().lines:
+    terminal_lines = os.get_terminal_size().lines
+    if old_terminal_size != terminal_lines:
         clear = True
 
-    terminal_size = os.get_terminal_size().lines
-    if terminal_size <= AMOUNT_OF_ROWS:
+    terminal_size = terminal_lines
+    if terminal_size <= config["amount_of_rows"]:
         clear = True
 
     if clear:
         os.system('cls' if os.name == 'nt' else 'clear')
+    return clear
 
 
-def ADJUST_SIZE(columns, clear):
-    global AMOUNT_OF_COLUMNS, AMOUNT_OF_ROWS
-    lines = os.get_terminal_size().lines
-    if AMOUNT_OF_ROWS < lines:
-        AMOUNT_OF_ROWS = os.get_terminal_size().lines - 1
+# ______________________adjust_size______________________
+def adjust_size(columns, clear, config):
+    """
+    Adjust AMOUNT_OF_ROWS and AMOUNT_OF_COLUMNS based on the current terminal size.
+    """
+    terminal_size = os.get_terminal_size()
+    terminal_lines, terminal_columns = terminal_size.lines, terminal_size.columns
+
+    if config["amount_of_rows"] < terminal_lines:
+        config["amount_of_rows"] = terminal_lines - 1
     else:
-        AMOUNT_OF_ROWS = os.get_terminal_size().lines
+        config["amount_of_rows"] = terminal_lines
 
-    AMOUNT_OF_COLUMNS = os.get_terminal_size().columns
+    config["amount_of_columns"] = terminal_columns
 
-    if AMOUNT_OF_COLUMNS < len(columns):
-        columns = columns[:AMOUNT_OF_COLUMNS]
+    if len(columns) > config["amount_of_columns"]:
+        columns = columns[:config["amount_of_columns"]]
         clear = True
-    elif AMOUNT_OF_COLUMNS == len(columns):
-        pass
-    else:
-        columns.append([] * (AMOUNT_OF_COLUMNS - len(columns)))
+    elif len(columns) < config["amount_of_columns"]:
+        columns += [[] for _ in range(config["amount_of_columns"] - len(columns))]
         clear = True
 
     return columns, clear
 
 
+# ______________________get_config______________________
+def get_config():
+    try:
+        file_name = CONFIG_FILE
+        if file_name:
+            if not file_name.endswith(".json"):
+                file_name += ".json"
+
+            try:
+                pathvalidate.validate_filename(filename=file_name)
+
+                script_dir = os.path.dirname(os.path.abspath(__file__))
+                controls_dir = os.path.join(script_dir, CONTROLS_DIR_NAME)
+                os.makedirs(controls_dir, exist_ok=True)
+                file_path = os.path.join(controls_dir, file_name)
+
+                with open(file_path, 'r', encoding="utf-8") as file:
+                    config = json.load(file)
+                    config["extended_color_cache"] = {}
+                    config['file_is_valid'] = True
+                    return config
+                
+            except pathvalidate.ValidationError as e:
+                print("The file you have chosen isn't valid.")
+                print(f"{e}\n")
+                print('The global variables will be used instead.')
+                input('Press enter to continue...')
+    except FileNotFoundError:
+        print(f'''The file "{CONFIG_FILE}" wasn't found.''')
+        print('The global variables will be used instead.')
+        input('Press enter to continue...')
+
+    return {
+        "new_sequence_chance": NEW_SEQUENCE_CHANCE,
+        "random_char_change_chance": RANDOM_CHAR_CHANGE_CHANCE,
+        "time_between_frames": TIME_BETWEEN_FRAMES,
+        "min_sequence_length": MIN_SEQUENCE_LENGTH,
+        "max_sequence_length": MAX_SEQUENCE_LENGTH,
+        "min_sequence_speed": MIN_SEQUENCE_SPEED,
+        "max_sequence_speed": MAX_SEQUENCE_SPEED,
+        "amount_of_columns": AMOUNT_OF_COLUMNS,
+        "amount_of_rows": AMOUNT_OF_ROWS,
+        "mode": MODE,
+        "auto_size": AUTO_SIZE,
+        "characters": CHARACTERS,
+        "colors": COLORS.copy(),
+        "extended_color_cache": {},
+        'file_is_valid': False
+    }
+
+
+# ______________________save_config______________________
+def save_config(config, update=False):
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    controls_dir = os.path.join(script_dir, CONTROLS_DIR_NAME)
+    os.makedirs(controls_dir, exist_ok=True)
+
+    s_config = {}
+    for key in config:
+        s_config[key] = config[key]
+    s_config['extended_color_cache'] = {}
+
+    if update:
+        try:
+            file_name = CONFIG_FILE
+            if not file_name.endswith(".json"):
+                file_name += ".json"
+            
+            file_path = os.path.join(controls_dir, file_name)
+
+            with open(file_path, 'w', encoding="utf-8") as file:
+                json.dump(s_config, file, indent=4)
+
+        except FileNotFoundError:
+            print(f'''The file "{CONFIG_FILE}" wasn't found.''')
+            print('Try to make a new file to save your config.')
+            input('Press enter to continue...')
+    else:
+        file_names = [f for f in os.listdir(controls_dir) if os.path.isfile(os.path.join(controls_dir, f))]
+        
+        numbers_used = []
+        for file in file_names:
+            file = file.replace('.json', '')
+            if file.startswith('controls'):
+                numbers_used.append(file[len('controls'):])
+
+        new_number = 1
+        while True:
+            if str(new_number) not in numbers_used:
+                break
+            new_number += 1
+        
+        file_name = f'controls{new_number}.json'
+
+        hide_or_show_cursor(show=True)
+        while True:
+            make_custom_name = input(f'Do you want to save in {file_name}?(y/n): ').lower().strip()
+
+            if make_custom_name == 'y':
+                make_custom_name = False
+                break
+            elif make_custom_name == 'n':
+                make_custom_name = True
+                break
+        
+        if make_custom_name:
+            while True:
+                new_name = input('Please enter the new name: ').strip()
+                if not new_name.endswith(".json"):
+                    new_name += ".json"
+
+                try:
+                    pathvalidate.validate_filename(filename=new_name)
+                except pathvalidate.ValidationError as e:
+                    print(f"{e}\n")
+                    continue
+
+                if new_name in file_names:
+                    print(f'{new_name} already exists.\n')
+                else:
+                    break
+            file_path = os.path.join(controls_dir, new_name)
+        else:
+            file_path = os.path.join(controls_dir, file_name)
+
+        with open(file_path, 'w', encoding="utf-8") as file:
+            json.dump(s_config, file, indent=4)
+        hide_or_show_cursor(hide=True)
+
+
+# ______________________run_matrix______________________
 def run_matrix():
     """
     Run the Matrix rain animation.
-
-    This is the main animation loop. It initializes the columns and debouncing timers,
-    then continuously updates and displays the falling character sequences. Keyboard input
-    is checked between frame updates to adjust settings and behavior in real-time.
-
-    Returns:
-        None
     """
-    columns = [[] for _ in range(AMOUNT_OF_COLUMNS)]  # Initialize columns.
-    count = [time.time() for _ in range(14)]  # Debounce timers for key presses.
-    old_terminal_size = os.get_terminal_size().lines
-    clear = True
-    sys.stdout.write("\033[?25l") # Hide the cursor
-    sys.stdout.flush()
-
     try:
+        # Create local configuration dictionary from the globals.
+        config = get_config()
+
+        columns = [[] for _ in range(config["amount_of_columns"])]
+        count = [time.time() for _ in range(14)]
+        old_terminal_size = os.get_terminal_size().lines
+        clear = True
+        hide_or_show_cursor(hide=True)
+
         while True:
-            start_time = time.time()  # Track the frame start time.
+            start_time = time.time()
 
-            if AUTO_SIZE:
-                columns, clear = ADJUST_SIZE(columns, clear)
+            if config["auto_size"]:
+                columns, clear = adjust_size(columns, clear, config)
 
-            # Update each column.
-            columns = [update_column(column) for column in columns]
+            # Update columns.
+            columns = [update_column(column, config) for column in columns]
 
-            rows = "\n".join(columns_to_rows(columns))
+            rows = "\n".join(columns_to_rows(columns, config))
 
-            clear_if_necessary(clear, old_terminal_size)
+            clear = clear_if_necessary(clear, old_terminal_size, config)
             clear = False
             old_terminal_size = os.get_terminal_size().lines
 
-            # Move cursor to top left and output the frame.
-            sys.stdout.write("\033[H" + rows + "\n")
+            sys.stdout.write("\u001b[H" + rows + "\n")
             sys.stdout.flush()
 
-            # Process keyboard events until the frame delay has passed.
             while True:
-                if count != 'stop':  # If controls are active.
-                    count, columns, check_clear = check_keyboard(count, columns)
+                if count != 'stop':
+                    count, columns, check_clear = check_keyboard(count, columns, config)
                     if check_clear:
                         clear = True
                 elif keyboard.is_pressed(RETURN_CONTROLS):
                     count = [time.time() for _ in range(14)]
 
-                if time.time() - start_time > TIME_BETWEEN_FRAMES:
+                if time.time() - start_time > config["time_between_frames"]:
                     break
 
     except KeyboardInterrupt:
         pass
     finally:
-        sys.stdout.write("\033[?25h") # restore the cursor
-        sys.stdout.flush()
+        hide_or_show_cursor(show=True)
         print('\nMatrix rain stopped')
 
 
