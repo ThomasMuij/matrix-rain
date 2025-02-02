@@ -281,7 +281,7 @@ def update_column(column, config):
         
         if config["random_char_change_chance"]:
             for idx in range(len(sequence['chars'])):
-                if random.random() < config["random_char_change_chance"]:
+                if random.random() < config["random_char_change_chance"] and idx != 0:
                     sequence['chars'][idx] = random.choice(config["characters"])
         
         sequence['cur_final_char'] += sequence['speed']
@@ -455,12 +455,36 @@ def check_keyboard(count, columns, config):
         print()
         hide_or_show_cursor(show=True)
         if load:
-            file_names = [f for f in os.listdir(CONTROLS_DIR_NAME) if os.path.isfile(os.path.join(CONTROLS_DIR_NAME, f))]
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            controls_dir = os.path.join(script_dir, CONTROLS_DIR_NAME)
+            os.makedirs(controls_dir, exist_ok=True)
+            file_names = [f for f in os.listdir(controls_dir) if os.path.isfile(os.path.join(controls_dir, f))]
             while True:
+                print('If you want to see all the files, enter "show(s)"')
                 load_file = input(f'Enter the name of the file you want to load or enter "exit(e)" to exit: ').strip()
 
                 if load_file.lower() in ['exit', 'e']:
                     break
+
+                if load_file.lower() in ['show', 's']:
+                    if len(file_names) == 0:
+                        print('No files have been found.')
+                        continue
+
+                    print('\nFiles:')
+
+                    line = file_names[0]
+                    i = 2
+                    for file_name in file_names[1:]:
+                        if i <= 3:
+                            line += ', ' + file_name
+                        else:
+                            i = 1
+                            print(line + ',')
+                            line = file_name
+                        i += 1
+                    print(line + '\n')
+                    continue
 
                 if not load_file.endswith('.json'):
                     load_file += '.json'
@@ -725,7 +749,7 @@ def get_config(file_name=CONFIG_FILE, dir_name=CONTROLS_DIR_NAME):
                         config = json.load(file)
                         config["extended_color_cache"] = {}
                         config['file_is_valid'] = True
-                        config['folder_is_valid'] = True
+                        config['folder_is_valid'] = folder_is_valid
                         return config
                     
                 except pathvalidate.ValidationError as e:
@@ -754,7 +778,7 @@ def get_config(file_name=CONFIG_FILE, dir_name=CONTROLS_DIR_NAME):
         "colors": COLORS.copy(),
         "extended_color_cache": {},
         'file_is_valid': False,
-        'folder_is_valid': False
+        'folder_is_valid': folder_is_valid
     }
 
 
