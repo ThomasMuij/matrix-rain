@@ -833,7 +833,7 @@ def save_config(config, update=False):
 
         hide_or_show_cursor(show=True)
         while True:
-            make_custom_name = input(f'Do you want to save in {file_name}?(y/n): ').lower().strip()
+            make_custom_name = input(f'Do you want to save in "{file_name}"?(y/n): ').lower().strip()
 
             if make_custom_name == 'y':
                 make_custom_name = False
@@ -844,7 +844,7 @@ def save_config(config, update=False):
         
         if make_custom_name:
             while True:
-                new_name = input('Please enter the new name: ').strip()
+                new_name = input('\nPlease enter the new name: ').strip()
                 if not new_name.endswith(".json"):
                     new_name += ".json"
 
@@ -855,7 +855,11 @@ def save_config(config, update=False):
                     continue
 
                 if new_name in file_names:
-                    print(f'{new_name} already exists.\n')
+                    print(f'\n{new_name} already exists.')
+                    print('You can save to this file but that will cause the data on this file to be erased.')
+                    save_anyway = input('Do you want to save anyway?(y/n): ').lower().strip()
+                    if save_anyway == 'y':
+                        break
                 else:
                     break
             file_path = os.path.join(controls_dir, new_name)

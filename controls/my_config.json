@@ -1,7 +1,7 @@
 {
-    "new_sequence_chance": 0.0022442713609293575,
+    "new_sequence_chance": 0.0027601706937285236,
     "random_char_change_chance": 0.0126347509768782,
-    "time_between_frames": 0.045,
+    "time_between_frames": 0.044117647058823525,
     "min_sequence_length": 3,
     "max_sequence_length": 25,
     "min_sequence_speed": 0.05,
