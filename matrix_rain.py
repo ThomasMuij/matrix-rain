@@ -6,6 +6,8 @@ import sys
 import json
 import pathvalidate
 
+# add option for amount of background colors and their 0 to 1 values and add it to help plus controls, make diff background color chance
+
 # if you saved your config in a file you can load it by putting the file name here
 # if you want to use the global variables, keep this variable as an emtpy string
 CONFIG_FILE = 'controls1'
@@ -45,6 +47,8 @@ COLORS = [
     "\u001b[38;2;0;16;0m"    # Very dark green
 ]
 
+BACKGROUND_CHANCE = 0.4
+
 # Control key assignments:
 SPEED_UP = 'f'
 SLOW_DOWN = 's'
@@ -73,6 +77,7 @@ FIRST_BRIGHT = 'shift+w'
 BLUE = 'b'
 GREEN = 'g'
 RED = 'r'
+UPDATE_BACKGROUND_COLORS = 'n'
 
 CHANGE_SEQ_LENGTH = 'l'
 
@@ -118,6 +123,7 @@ HELP_MESSAGE = f'''Controls:
     {BLUE} = change color to blue
     {GREEN} = change color to green
     {RED} = change color to red
+    {UPDATE_BACKGROUND_COLORS} = create a background by making some sequences less bright
 
     {CHANGE_SEQ_LENGTH} = set a new min and max length for sequences
               
@@ -231,7 +237,8 @@ def make_sequence(config):
     seq_length = random.randint(config["min_sequence_length"], config["max_sequence_length"])
     return {'chars': [random.choice(config["characters"]) for _ in range(seq_length)],
             'cur_final_char': 0,
-            'speed': random.uniform(config["min_sequence_speed"], config["max_sequence_speed"])}
+            'speed': random.uniform(config["min_sequence_speed"], config["max_sequence_speed"]),
+            'colors': config['colors'] if random.random() > config['background_chance'] else random.choice(config['background_colors'])}
 
 
 # ______________________columns_to_rows______________________
@@ -272,10 +279,10 @@ def columns_to_rows(columns, config):
             if 0 <= char_index < len(sequence['chars']):
                 seq_len = len(sequence['chars'])
 
-                if seq_len > len(config["colors"]):
-                    colors_extended = extend_colors(config["colors"], seq_len, config)
+                if seq_len > len(sequence["colors"]):
+                    colors_extended = extend_colors(sequence["colors"], seq_len, config)
                 else:
-                    colors_extended = config["colors"]
+                    colors_extended = sequence["colors"]
 
                 color = colors_extended[round((len(colors_extended) - 1) * (char_index / seq_len))]
                 char = sequence['chars'][char_index]
@@ -284,10 +291,10 @@ def columns_to_rows(columns, config):
             elif is_next and 0 <= next_sequence_char_index < len(next_sequence['chars']):
                 seq_len = len(next_sequence['chars'])
 
-                if seq_len > len(config["colors"]):
-                    colors_extended = extend_colors(config["colors"], seq_len, config)
+                if seq_len > len(sequence["colors"]):
+                    colors_extended = extend_colors(sequence["colors"], seq_len, config)
                 else:
-                    colors_extended = config["colors"]
+                    colors_extended = sequence["colors"]
 
                 color = colors_extended[round((len(colors_extended) - 1) * (next_sequence_char_index / seq_len))]
                 char = next_sequence['chars'][next_sequence_char_index]
@@ -328,13 +335,24 @@ def update_column(column, config):
         
         sequence['cur_final_char'] += sequence['speed']
         
-        if sequence['cur_final_char'] <= (config["amount_of_rows"] + len(sequence['chars'])):
+        if sequence['cur_final_char'] < (config["amount_of_rows"] + len(sequence['chars'])):
             new_column.append(sequence)
     
-    new_column.sort(key=lambda seq: seq['cur_final_char'])
+    for i in range(len(column) - 1):
+        sequence = column[i]
+        next_sequence = column[i + 1]
+        if sequence['speed'] <= next_sequence['speed']:
+            continue
+
+        next_sequence_tail = next_sequence['cur_final_char'] - len(next_sequence['chars'])
+
+        if sequence['cur_final_char'] >= next_sequence_tail:
+            column[i], column[i + 1] = column[i + 1], column[i]
+
+    # new_column.sort(key=lambda seq: seq['cur_final_char'])
     if new_column:
         first_sequence = new_column[0]
-        if first_sequence['cur_final_char'] >= len(config["colors"]) and random.random() < config["new_sequence_chance"]:
+        if first_sequence['cur_final_char'] >= len(sequence["colors"]) and random.random() < config["new_sequence_chance"]:
             new_column.insert(0, make_sequence(config))
     return new_column
 
@@ -370,6 +388,7 @@ def check_keyboard(count, columns, config):
     time_passed = [cur_time - t for t in count]
     time_used = 0
     clear = False
+    update_colors = False
 
     # speed:
     if time_passed[time_used] > 0.08 and not keyboard.is_pressed('shift') and keyboard.is_pressed(SPEED_UP):
@@ -547,6 +566,7 @@ def check_keyboard(count, columns, config):
                     break
         hide_or_show_cursor(hide=True)
         clear = True
+        update_colors = True
     
     # first color:
     if keyboard.is_pressed(FIRST_BOLD):
@@ -556,9 +576,11 @@ def check_keyboard(count, columns, config):
         else:
             parts[1] = '1;' + parts[1]
         config["colors"][0] = '['.join(parts)
+        update_colors = True
 
     if not keyboard.is_pressed('shift') and keyboard.is_pressed(FIRST_WHITE):
         config["colors"][0] = "\u001b[0m"  # Reset to default white
+        update_colors = True
 
     if keyboard.is_pressed(FIRST_BRIGHT):
         first_color = parse_ansi_color(config["colors"][1])
@@ -569,6 +591,7 @@ def check_keyboard(count, columns, config):
             config["colors"][0] = "\u001b[38;2;210;255;210m"
         elif g == 255 and b == 255 and r != 255:
             config["colors"][0] = "\u001b[38;2;225;255;255m"
+        update_colors = True
 
     # colors
     if keyboard.is_pressed(RED):
@@ -581,6 +604,7 @@ def check_keyboard(count, columns, config):
                          "\u001b[38;2;176;0;0m",
                          "\u001b[38;2;160;0;0m",
                          "\u001b[38;2;144;0;0m"]
+        update_colors = True
 
     if keyboard.is_pressed(GREEN):
         config["colors"] = ["\u001b[38;2;64;255;64m",
@@ -592,6 +616,7 @@ def check_keyboard(count, columns, config):
                          "\u001b[38;2;0;80;0m",
                          "\u001b[38;2;0;48;0m",
                          "\u001b[38;2;0;16;0m"]
+        update_colors = True
 
     if not keyboard.is_pressed('shift') and keyboard.is_pressed(BLUE):
         config["colors"] = ["\u001b[38;2;64;255;255m",
@@ -603,6 +628,60 @@ def check_keyboard(count, columns, config):
                          "\u001b[38;2;0;80;80m",
                          "\u001b[38;2;0;48;48m",
                          "\u001b[38;2;0;16;16m"]
+        update_colors = True
+
+    # background:
+    if keyboard.is_pressed(UPDATE_BACKGROUND_COLORS):
+        flush_stdin()
+        print()
+        hide_or_show_cursor(show=True)
+        old_values = config['background_brightness_reduction']
+        config['background_brightness_reduction'] = []
+
+        print(f'Old background colors: {old_values}')
+        print('Enter the value for reduction in brightness for each background color from 0 to 1 (0.6 --> brightness will reduce to 60%)')
+        print('Enter "exit(e)" when you have chosen all background brightnesses')
+        i = 1
+        while True:
+            try:
+                reduction_rate = input(f'Background {i} reduction rate: ').strip().lower()
+                if reduction_rate in ['e', 'exit']:
+                    if len(config['background_brightness_reduction']) != 0:
+                        break
+                    else:
+                        config['background_brightness_reduction'] = old_values
+                        break
+
+                reduction_rate = float(reduction_rate)
+
+                if not 0 < reduction_rate < 1:
+                    print('Reduction rate has to be between 0 and 1.')
+                    continue
+                config['background_brightness_reduction'].append(reduction_rate)
+                i += 1
+
+                if i > 3:
+                    print("You have entered all 3 available background colors")
+                    break
+            except ValueError:
+                print('Reduction rate has to be a number.')
+                continue
+
+        while True:
+            try:
+                background_chance = float(input(f'Enter the chance for a sequence to become part of the background(previous: {config['background_chance']}): '))
+                if not 0 <= background_chance <= 1:
+                    print('Background chance has range from 0 to 1.')
+                    continue
+                config['background_chance'] = background_chance
+                break
+            except ValueError:
+                print('Background chance has to be a number.')
+                continue
+
+        hide_or_show_cursor(hide=True)
+        update_colors = True
+        clear = True
 
     # characters:
     if keyboard.is_pressed(CHARS_01):
@@ -706,6 +785,7 @@ AUTO_SIZE = {config["auto_size"]} (Toggle for automatic resizing)
 
 CHARACTERS = {config["characters"]}
 COLORS = {config["colors"]}
+BACKGROUD_COLORS = {config["background_colors"]}
 ''')
         input('Press enter to continue...')
         clear = True
@@ -719,10 +799,34 @@ COLORS = {config["colors"]}
 
     # remove controls:
     if keyboard.is_pressed(REMOVE_CONTROLS):
-        return 'stop', columns, clear
+        return 'stop', columns, clear, update_colors
 
     time.sleep(0.001)
-    return count, columns, clear
+    return count, columns, clear, update_colors
+
+
+# ______________________update_background______________________
+def update_sequence_colors(config, columns):
+    """
+    """
+    old_background_colors = config['background_colors']
+    config['background_colors'] = []
+
+    for reduction_rate in config['background_brightness_reduction']:
+        new_color = []
+        for color in config['colors']:
+            rgb = parse_ansi_color(color)
+            r, g, b = [int(value * reduction_rate) for value in rgb]
+            new_color.append(f"\u001b[38;2;{r};{g};{b}m")
+
+        config['background_colors'].append(new_color)
+
+    for column in columns:
+        for sequence in column:
+            if sequence['colors'] in old_background_colors:
+                random.choice(config['background_colors'])
+            else:
+                sequence['colors'] = config['colors']
 
 
 # ______________________clear_if_necessary______________________
@@ -847,6 +951,9 @@ def get_config(file_name=CONFIG_FILE, dir_name=CONTROLS_DIR_NAME):
         "auto_size": AUTO_SIZE,
         "characters": CHARACTERS,
         "colors": COLORS.copy(),
+        'background_brightness_reduction': [0.7],
+        'background_colors': [],
+        'background_chance': BACKGROUND_CHANCE,
         "extended_color_cache": {},
         'file_is_valid': False,
         'folder_is_valid': folder_is_valid
@@ -965,10 +1072,14 @@ def run_matrix():
         count = [time.time() for _ in range(14)]
         old_terminal_size = os.get_terminal_size().lines
         clear = True
+        update_colors = True
         hide_or_show_cursor(hide=True)
 
         while True:
             start_time = time.time()
+
+            if update_colors:
+                update_sequence_colors(config, columns)
 
             if config["auto_size"]:
                 columns, clear = adjust_size(columns, clear, config)
@@ -987,7 +1098,7 @@ def run_matrix():
 
             while True:
                 if count != 'stop':
-                    count, columns, check_clear = check_keyboard(count, columns, config)
+                    count, columns, check_clear, update_colors = check_keyboard(count, columns, config)
                     if check_clear:
                         clear = True
                 elif keyboard.is_pressed(RETURN_CONTROLS):
