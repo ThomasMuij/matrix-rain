@@ -139,14 +139,19 @@ HELP_MESSAGE = f'''Controls:
 # ______________________parse_ansi_color______________________
 def parse_ansi_color(ansi):
     """
-    Parse an ANSI color escape code of the form "\u001b[38;2;R;G;Bm" and return the RGB tuple.
-    For the reset code ("\u001b[0m"), we return white (255,255,255).
+    Parse an ANSI color escape code and return its RGB representation.
+
+    Args:
+        ansi (str): ANSI escape code string, e.g. "\u001b[38;2;R;G;Bm".
+
+    Returns:
+        tuple: A tuple (R, G, B) of integer color values. Returns (255, 255, 255) for the reset code.
     """
     if ansi == "\u001b[0m":
         return (255, 255, 255)
     try:
         parts = ansi.lstrip("\u001b[").rstrip("m").split(";")
-        if len(parts) == 6:
+        if parts[0] == '0':
             parts.pop(0)
         if parts[0] == "38" and parts[1] == "2" and len(parts) >= 5:
             return (int(parts[2]), int(parts[3]), int(parts[4]))
@@ -160,6 +165,14 @@ def extend_colors(original_colors, new_length, config):
     """
     Return a color gradient of new_length using linear interpolation.
     Uses caching stored in config["extended_color_cache"].
+
+    Args:
+        original_colors (list): List of ANSI color escape codes.
+        new_length (int): Desired length of the extended color list.
+        config (dict): Configuration dictionary containing the cache.
+
+    Returns:
+        list: A list of ANSI escape codes representing the extended gradient.
     """
     key = (tuple(original_colors), new_length)
     if key in config["extended_color_cache"]:
@@ -172,12 +185,15 @@ def extend_colors(original_colors, new_length, config):
     extended = []
     n = len(original_colors)
     for i in range(new_length):
-        t = i / (new_length - 1)
-        pos = t * (n - 1)
+        t = i / (new_length - 1) # relative position in the new color list
+        pos = t * (n - 1) # find index(float) in original colors that's at the same relative position as in the new one
         idx = int(pos)
+        # Fractional distance between idx and the next color, used for interpolation (ranges from 0 to 1). 
+        # If idx is the last color, set t2 to 1.0 to avoid out-of-bounds errors.
         t2 = pos - idx if idx < n - 1 else 1.0
-        rgb1 = parse_ansi_color(original_colors[idx])
-        rgb2 = parse_ansi_color(original_colors[min(idx + 1, n - 1)])
+        rgb1 = parse_ansi_color(original_colors[idx]) # find the r, g, b components of the first color with a smaller index
+        rgb2 = parse_ansi_color(original_colors[min(idx + 1, n - 1)]) # find the next color, if we are the end of the list take the last one itself
+        # find the weighted average between the 2 colors based on the distance from the first one:
         r = int(round(rgb1[0] * (1 - t2) + rgb2[0] * t2))
         g = int(round(rgb1[1] * (1 - t2) + rgb2[1] * t2))
         b = int(round(rgb1[2] * (1 - t2) + rgb2[2] * t2))
@@ -188,6 +204,13 @@ def extend_colors(original_colors, new_length, config):
 
 # ______________________hide_or_show_cursor______________________
 def hide_or_show_cursor(hide=False, show=False):
+    """
+    Hide or show the terminal cursor.
+
+    Args:
+        hide (bool): If True, hides the cursor.
+        show (bool): If True, shows the cursor.
+    """
     if hide:
         sys.stdout.write("\u001b[?25l")
     elif show:
@@ -198,6 +221,12 @@ def hide_or_show_cursor(hide=False, show=False):
 def make_sequence(config):
     """
     Create a new sequence for a column using parameters from config.
+
+    Args:
+        config (dict): Configuration dictionary with sequence parameters.
+
+    Returns:
+        dict: A dictionary representing a sequence with its characters, current final character position, and speed.
     """
     seq_length = random.randint(config["min_sequence_length"], config["max_sequence_length"])
     return {'chars': [random.choice(config["characters"]) for _ in range(seq_length)],
@@ -209,6 +238,13 @@ def make_sequence(config):
 def columns_to_rows(columns, config):
     """
     Convert columns of sequences into rows for terminal display.
+
+    Args:
+        columns (list): List of columns, each containing sequences.
+        config (dict): Configuration dictionary containing display parameters.
+
+    Returns:
+        list: A list of strings, each representing a row to be displayed in the terminal.
     """
     rows = []
     for row_index in range(config["amount_of_rows"]):
@@ -241,8 +277,7 @@ def columns_to_rows(columns, config):
                 else:
                     colors_extended = config["colors"]
 
-                # Calculate color index ensuring it is within range.
-                color = colors_extended[min(len(colors_extended) - 1, round(len(colors_extended) * char_index / seq_len))]
+                color = colors_extended[round((len(colors_extended) - 1) * (char_index / seq_len))]
                 char = sequence['chars'][char_index]
                 row.append(f"{color}{char}\u001b[0m")
 
@@ -254,7 +289,7 @@ def columns_to_rows(columns, config):
                 else:
                     colors_extended = config["colors"]
 
-                color = colors_extended[round(len(colors_extended) * next_sequence_char_index / seq_len)]
+                color = colors_extended[round((len(colors_extended) - 1) * (next_sequence_char_index / seq_len))]
                 char = next_sequence['chars'][next_sequence_char_index]
                 row.append(f"{color}{char}\u001b[0m")
             else:
@@ -266,7 +301,14 @@ def columns_to_rows(columns, config):
 # ______________________update_column______________________
 def update_column(column, config):
     """
-    Update a single column of sequences using config.
+    Update a single column of sequences using config parameters.
+
+    Args:
+        column (list): A list of sequences in the column.
+        config (dict): Configuration dictionary with sequence and display parameters.
+
+    Returns:
+        list: The updated list of sequences for the column.
     """
     new_column = []
     if len(column) == 0:
@@ -315,7 +357,14 @@ def flush_stdin():
 def check_keyboard(count, columns, config):
     """
     Check keyboard input and update config (and column data) accordingly.
-    Returns (updated_count, updated_columns, clear_flag) or ('stop', columns, clear_flag) if controls are disabled.
+
+    Args:
+        count (list): List of timestamps for debouncing various key inputs.
+        columns (list): List of current columns of sequences.
+        config (dict): Configuration dictionary with parameters.
+
+    Returns:
+        tuple: Either (updated_count, updated_columns, clear_flag) or ('stop', columns, clear_flag) if controls are disabled.
     """
     cur_time = time.time()
     time_passed = [cur_time - t for t in count]
@@ -680,6 +729,11 @@ COLORS = {config["colors"]}
 def clear_if_necessary(clear, old_terminal_size, config):
     """
     Clear the terminal screen if necessary.
+
+    Args:
+        clear (bool): Flag indicating whether a clear is already requested.
+        old_terminal_size (int): Previous terminal line count.
+        config (dict): Configuration dictionary with display parameters.
     """
     terminal_lines = os.get_terminal_size().lines
     if old_terminal_size != terminal_lines:
@@ -691,13 +745,20 @@ def clear_if_necessary(clear, old_terminal_size, config):
 
     if clear:
         os.system('cls' if os.name == 'nt' else 'clear')
-    return clear
 
 
 # ______________________adjust_size______________________
 def adjust_size(columns, clear, config):
     """
     Adjust AMOUNT_OF_ROWS and AMOUNT_OF_COLUMNS based on the current terminal size.
+
+    Args:
+        columns (list): Current list of columns.
+        clear (bool): Clear flag indicating if a clear is needed.
+        config (dict): Configuration dictionary with display parameters.
+
+    Returns:
+        tuple: Updated columns list and clear flag.
     """
     terminal_size = os.get_terminal_size()
     terminal_lines, terminal_columns = terminal_size.lines, terminal_size.columns
@@ -721,6 +782,16 @@ def adjust_size(columns, clear, config):
 
 # ______________________get_config______________________
 def get_config(file_name=CONFIG_FILE, dir_name=CONTROLS_DIR_NAME):
+    """
+    Retrieve configuration settings from a JSON file if available, otherwise return default values.
+
+    Args:
+        file_name (str): Name of the configuration file. Default is CONFIG_FILE.
+        dir_name (str): Directory where configuration files are stored. Default is CONTROLS_DIR_NAME.
+
+    Returns:
+        dict: A dictionary containing configuration settings.
+    """
     try:
         if file_name:
             try:
@@ -784,6 +855,13 @@ def get_config(file_name=CONFIG_FILE, dir_name=CONTROLS_DIR_NAME):
 
 # ______________________save_config______________________
 def save_config(config, update=False):
+    """
+    Save the current configuration settings to a JSON file.
+
+    Args:
+        config (dict): Configuration settings to be saved.
+        update (bool): If True, update an existing config file; otherwise, save as a new file.
+    """
     script_dir = os.path.dirname(os.path.abspath(__file__))
     controls_dir = os.path.join(script_dir, CONTROLS_DIR_NAME)
     os.makedirs(controls_dir, exist_ok=True)
@@ -875,6 +953,9 @@ def save_config(config, update=False):
 def run_matrix():
     """
     Run the Matrix rain animation.
+    
+    Retrieves configuration, sets up the display, updates columns and rows,
+    handles keyboard input, and renders the animation until interrupted.
     """
     try:
         # Create local configuration dictionary from the globals.
@@ -897,7 +978,7 @@ def run_matrix():
 
             rows = "\n".join(columns_to_rows(columns, config))
 
-            clear = clear_if_necessary(clear, old_terminal_size, config)
+            clear_if_necessary(clear, old_terminal_size, config)
             clear = False
             old_terminal_size = os.get_terminal_size().lines
 

@@ -2,23 +2,24 @@ import time
 import threading
 import keyboard
 
-def fun(config):
-    while True:
-        if keyboard.is_pressed('up'):
-            config['age'] += 1
-        time.sleep(0.01)
 
+config = {'name': 'Old', 'age': 0, 'days': {'jan': [1, 2], 'feb': [2, 3]}}
 
-def fun2():
-    config = {'name': 'John', 'age': 5, 'days': [1, 3, 5]}
+copy = {}
+for key in config:
+    try:
+        copy[key] = config[key].copy()
+    except AttributeError:
+        copy[key] = config[key]
+# copy = config.copy()
 
-    run_fun = threading.Thread(target=fun, args=[config])
-    run_fun.daemon = True
-    run_fun.start()
+copy['name'] = 'New'
+copy['age'] += 1
 
-    while True:
-        if keyboard.is_pressed('down'):
-            print(config)
-        time.sleep(0.01)
+copy['days']['mar'] = [6, 7]
+copy['days']['jan'] = ['new', 'list']
 
-fun2()
+copy['days']['feb'][0] += 10
+
+print(config)
+
