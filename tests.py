@@ -1,1 +1,1 @@
-print(float(''))
+print("\u001b[38;2;0;8;0m" 'a' + "\u001b[0m")
