@@ -223,7 +223,7 @@ def extend_colors(original_colors, new_length, config):
     Returns:
         list: A list of ANSI escape codes representing the extended gradient.
     """
-    max_cache_size = 200
+    max_cache_size = 250
     key = (tuple(original_colors), new_length)
     cache = config["extended_color_cache"]
 
