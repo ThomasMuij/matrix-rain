@@ -8,14 +8,16 @@ import sys
 import json
 import pathvalidate
 import collections
+import threading
 
 
 # if you saved your config in a file you can load it by putting the file name here
 # if you want to use the global variables, keep this variable as an emtpy string
-CONFIG_FILE = 'config1'
+CONFIG_FILE = ''
 
 
 CONFIG_DIR_NAME = 'config' # this shouldn't be changed
+
 
 # Global constants (control keys, help messages, etc.) remain unchanged.
 NEW_SEQUENCE_CHANCE = 0.02
@@ -39,7 +41,7 @@ VISIBILITY_PRIORITY = 'higher'
 CHARACTERS = "ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍｦｲｸｺｿﾁﾄﾉﾌﾤﾨﾛﾝ012345789:.=*+-<>"
 
 # Green gradient colors (8 shades, from brightest to darkest)
-COLORS = [
+COLORS = (
     "\u001b[0m",              # White: Reset color (default terminal color)
     "\u001b[38;2;0;255;0m",   # Brightest green
     "\u001b[38;2;0;208;0m",   # Brighter green
@@ -49,106 +51,49 @@ COLORS = [
     "\u001b[38;2;0;80;0m",    # Dark green
     "\u001b[38;2;0;48;0m",    # Darker green
     "\u001b[38;2;0;24;0m"     # Very dark green
-]
+)
 
 BACKGROUND_CHANCE = 0.4
 
 # Control key assignments:
-SPEED_UP = 'f'
-SLOW_DOWN = 's'
-
-CHANGE_SPEED_DIFF = 'c'
-
-PAUSE = 'p'
-MODE_CHAR = 'q'
-AUTO_SIZE_CHAR = 'a'
-MAKE_SPACE_BETWEEN_COLUMNS = 'shift+space'
-CHANGE_VISIBILITY_PRIORITY = '3'
-
-MORE_RANDOM_CHAR = 'shift+up'
-LESS_RANDOM_CHAR = 'shift+down'
-
-SHORTEN_LENGTH = 'up'
-INCREASE_LENGTH = 'down'
-
-LESS_COLUMNS = 'left'
-MORE_COLUMNS = 'right'
-
-MORE_NEW_SEQUENCE_CHANCE = '+'
-LESS_NEW_SEQUENCE_CHANCE = '-'
-
-FIRST_BOLD = 'shift+b'
-FIRST_WHITE = 'w'
-FIRST_BRIGHT = 'shift+w'
-BLUE = 'b'
-GREEN = 'g'
-RED = 'r'
-UPDATE_BACKGROUND_COLORS = 'n'
-CREATE_COLOR = '7'
-
-CHANGE_SEQ_LENGTH = 'l'
-
-CHARS_01 = '0'
-CHARS_ORIGINAL = '1'
-SET_ANY_CHARS = '9'
-
-SHOW_HELP_MESSAGE = 'h'
-CUR_VALUES = 'v'
-
-SAVE_CONFIG = 'shift+s'
-LOAD_CONFIG = 'shift+l'
-
-REMOVE_CONTROLS = 'shift+backspace'
-RETURN_CONTROLS = 'ctrl+shift+enter'
-
-HELP_MESSAGE = f'''Controls:
-    up --> arrow up,...
-
-    {SPEED_UP} = speed up (relative to current speed)
-    {SLOW_DOWN} = slow down (relative to current speed)
-
-    {CHANGE_SPEED_DIFF} = make some sequences move slower or faster (for example once every 3 frames)
-
-    {PAUSE} = (un)pause
-    {MODE_CHAR} = toggles if the first letter of a sequence is random and the rest follow or if the sequence remains unchanged
-    {AUTO_SIZE_CHAR} = adjusts matrix length and width based on the terminal's size
-    {MAKE_SPACE_BETWEEN_COLUMNS} = create an empty columns in between all columns
-
-    {MORE_RANDOM_CHAR} = increase chance for characters to change mid-sequence
-    {LESS_RANDOM_CHAR} = decrease chance for characters to change mid-sequence
-              
-    {SHORTEN_LENGTH} = shorten matrix length (rows)
-    {INCREASE_LENGTH} = increase matrix length (rows)
-    {LESS_COLUMNS} = reduce number of columns
-    {MORE_COLUMNS} = increase number of columns
-              
-    plus("{MORE_NEW_SEQUENCE_CHANCE}") = increase the chance of a new sequence starting (relative chance)
-    minus("{LESS_NEW_SEQUENCE_CHANCE}") = decrease the chance of a new sequence starting (relative chance)
-
-    {FIRST_BOLD} = make the first character bold
-    {FIRST_WHITE} = make first character white
-    {FIRST_BRIGHT} = make first character white but in the shade of the other colors
-    {BLUE} = change color to blue
-    {GREEN} = change color to green
-    {RED} = change color to red
-    {UPDATE_BACKGROUND_COLORS} = create a background by making some sequences less bright
-    {CREATE_COLOR} = create a new color or use your created colors
-
-    {CHANGE_SEQ_LENGTH} = set a new min and max length for sequences
-              
-    {CHARS_01} = change characters to "01"
-    {CHARS_ORIGINAL} = reset characters to original set
-    {SET_ANY_CHARS} = prompt for input to add or replace characters
-
-    {SAVE_CONFIG} = save current values (TIME_BETWEEN_FRAMES...)
-    {LOAD_CONFIG} = load values from a file
-              
-    {CUR_VALUES} = display current values
-    {REMOVE_CONTROLS} = disable keyboard controls temporarily
-    {RETURN_CONTROLS} = re-enable keyboard controls
-              
-    ctrl+c = stop matrix rain
-'''
+CONTROLS = {
+    "speed_up": "f",
+    "slow_down": "s",
+    "change_speed_diff": "d",
+    "pause": "p",
+    "mode_char": "q",
+    "auto_size_char": "a",
+    "make_space_between_columns": "shift space",
+    "change_visibility_priority": "3",
+    "more_random_char": "shift up",
+    "less_random_char": "shift down",
+    "shorten_length": "up",
+    "increase_length": "down",
+    "less_columns": "left",
+    "more_columns": "right",
+    "more_new_sequence_chance": "shift +",
+    "less_new_sequence_chance": "-",
+    "first_bold": "B shift",
+    "first_white": "w",
+    "first_bright": "W shift",
+    "blue": "b",
+    "green": "g",
+    "red": "r",
+    "update_background_colors": "n",
+    "create_color": "7",
+    "change_seq_length": "l",
+    "chars_01": "0",
+    "chars_original": "1",
+    "set_any_chars": "9",
+    "change_controls": "shift C",
+    "show_help_message": "h",
+    "cur_values": "v",
+    "save_config": "S shift",
+    "load_config": "L shift",
+    "remove_controls": "shift backspace",
+    "return_controls": "ctrl shift enter",
+    "check_if_pressed": "shift ctrl"
+    }
 
 
 # ______________________hide_or_show_cursor______________________
@@ -279,9 +224,9 @@ def make_sequence(config):
     """
     seq_length = random.randint(config["min_sequence_length"], config["max_sequence_length"])
     if random.random() > config['background_chance']:
-        colors = config['colors'].copy()
+        colors = config['colors']
     else:
-        colors = random.choice(list(config['background_colors'].keys()))
+        colors = random.choice(tuple(config['background_colors'].keys()))
     return {'chars': [random.choice(config["characters"]) for _ in range(seq_length)],
             'final_char': 0,
             'speed': random.uniform(config["min_sequence_speed"], config["max_sequence_speed"]),
@@ -455,16 +400,29 @@ def update_sequence_and_background_colors(config, columns):
             sequence['colors_extended'] = []
             if sequence['colors'] in old_background_colors:
                 if make_random:
-                    sequence['colors'] = random.choice(list(config['background_colors'].keys()))
+                    sequence['colors'] = random.choice(tuple(config['background_colors'].keys()))
                 else:
                     index = old_background_colors.index(sequence['colors'])
-                    sequence['colors'] = list(config['background_colors'].keys())[index]
+                    sequence['colors'] = tuple(config['background_colors'].keys())[index]
             else:
-                sequence['colors'] = config['colors'].copy()
+                sequence['colors'] = config['colors']
+
+
+# ______________________check_key______________________
+def keys_are_pressed(currently_pressed, lock, config, keys):
+    with lock:
+        for prevent_key in config['controls']['check_if_pressed']:
+            if prevent_key not in keys and prevent_key in currently_pressed:
+                return False
+
+        for key in keys:
+            if key not in currently_pressed:
+                return False
+        return True
 
 
 # ______________________check_keyboard______________________
-def check_keyboard(count, columns, config):
+def check_keys(currently_pressed, lock, count, columns, config):
     """
     Check keyboard input and update config (and column data) accordingly.
 
@@ -482,41 +440,45 @@ def check_keyboard(count, columns, config):
     clear = False
     update_colors = False
 
-    # speed:
-    if time_passed[time_used] > 0.08 and not keyboard.is_pressed('shift') and keyboard.is_pressed(SPEED_UP):
+    if keys_are_pressed(currently_pressed, lock, config, ['ctrl', 'c']):
+        raise KeyboardInterrupt
+    
+    # more speed:
+    if time_passed[time_used] > 0.08 and keys_are_pressed(currently_pressed, lock, config, config['controls']['speed_up']):
         count[time_used] = cur_time
-        config["time_between_frames"] /= 1.02
+        config["time_between_frames"] /= 1.03
     time_used += 1
 
-    if time_passed[time_used] > 0.08 and not keyboard.is_pressed('shift') and keyboard.is_pressed(SLOW_DOWN):
+    # less speed
+    if time_passed[time_used] > 0.08 and keys_are_pressed(currently_pressed, lock, config, config['controls']['slow_down']):
         count[time_used] = cur_time
-        config["time_between_frames"] *= 1.02
+        config["time_between_frames"] *= 1.03
     time_used += 1
 
     # pause:
-    if time_passed[time_used] > 0.3 and keyboard.is_pressed(PAUSE):
-        while keyboard.is_pressed(PAUSE): time.sleep(0.01)
+    if time_passed[time_used] > 0.3 and keys_are_pressed(currently_pressed, lock, config, config['controls']['pause']):
+        while keys_are_pressed(currently_pressed, lock, config, config['controls']['pause']): time.sleep(0.01)
         while True:
             time.sleep(0.01)
-            if keyboard.is_pressed(PAUSE):
+            if keys_are_pressed(currently_pressed, lock, config, config['controls']['pause']):
                 count[time_used] = time.time()
                 break
     time_used += 1
 
     # mode:
-    if time_passed[time_used] > 0.3 and keyboard.is_pressed(MODE_CHAR):
+    if time_passed[time_used] > 0.3 and keys_are_pressed(currently_pressed, lock, config, config['controls']['mode_char']):
         count[time_used] = cur_time
         config["mode"] = not config["mode"]
     time_used += 1
 
     # space between columns:
-    if time_passed[time_used] > 0.3 and keyboard.is_pressed(MAKE_SPACE_BETWEEN_COLUMNS):
+    if time_passed[time_used] > 0.3 and keys_are_pressed(currently_pressed, lock, config, config['controls']['make_space_between_columns']):
         count[time_used] = cur_time
         config["space_between_columns"] = not config["space_between_columns"]
     time_used += 1
 
     # reverse priority:
-    if time_passed[time_used] > 0.3 and keyboard.is_pressed(CHANGE_VISIBILITY_PRIORITY):
+    if time_passed[time_used] > 0.3 and keys_are_pressed(currently_pressed, lock, config, config['controls']['change_visibility_priority']):
         count[time_used] = cur_time
         for i in range(len(columns)):
             columns[i] = columns[i][::-1]
@@ -527,57 +489,61 @@ def check_keyboard(count, columns, config):
     time_used += 1
 
     # auto size:
-    if time_passed[time_used] > 0.3 and keyboard.is_pressed(AUTO_SIZE_CHAR):
+    if time_passed[time_used] > 0.3 and keys_are_pressed(currently_pressed, lock, config, config['controls']['auto_size_char']):
         count[time_used] = cur_time
         config["auto_size"] = not config["auto_size"]
     time_used += 1
 
-    # rows:
-    if time_passed[time_used] > 0.09 and config["amount_of_rows"] > 0 and not keyboard.is_pressed('shift') and keyboard.is_pressed(SHORTEN_LENGTH):
+    # less rows:
+    if time_passed[time_used] > 0.09 and config["amount_of_rows"] > 0 and keys_are_pressed(currently_pressed, lock, config, config['controls']['shorten_length']):
         count[time_used] = cur_time
         config["amount_of_rows"] -= 1
         clear = True
     time_used += 1
 
-    if time_passed[time_used] > 0.09 and config["amount_of_rows"] < 80 and not keyboard.is_pressed('shift') and keyboard.is_pressed(INCREASE_LENGTH):
+    # more rows
+    if time_passed[time_used] > 0.09 and config["amount_of_rows"] < 80 and keys_are_pressed(currently_pressed, lock, config, config['controls']['increase_length']):
         count[time_used] = cur_time
         config["amount_of_rows"] += 1
         clear = True
     time_used += 1
 
-    # columns:
-    if time_passed[time_used] > 0.05 and config["amount_of_columns"] > 0 and keyboard.is_pressed(LESS_COLUMNS):
+    # less columns:
+    if time_passed[time_used] > 0.05 and config["amount_of_columns"] > 0 and keys_are_pressed(currently_pressed, lock, config, config['controls']['less_columns']):
         count[time_used] = cur_time
         config["amount_of_columns"] -= 1
         clear = True
     time_used += 1
 
-    if time_passed[time_used] > 0.05 and config["amount_of_columns"] < 200 and keyboard.is_pressed(MORE_COLUMNS):
+    # more columns:
+    if time_passed[time_used] > 0.05 and config["amount_of_columns"] < 200 and keys_are_pressed(currently_pressed, lock, config, config['controls']['more_columns']):
         count[time_used] = cur_time
         config["amount_of_columns"] += 1
         clear = True
     time_used += 1
 
-    # sequence chance:
-    if time_passed[time_used] > 0.1 and keyboard.is_pressed(LESS_NEW_SEQUENCE_CHANCE):
+    # less sequence chance:
+    if time_passed[time_used] > 0.1 and keys_are_pressed(currently_pressed, lock, config, config['controls']['less_new_sequence_chance']):
         count[time_used] = cur_time
-        config["new_sequence_chance"] /= 1.03
+        config["new_sequence_chance"] /= 1.045
     time_used += 1
 
-    if time_passed[time_used] > 0.1 and config["new_sequence_chance"] <= 1 and (keyboard.is_pressed('=+shift') or keyboard.is_pressed(MORE_NEW_SEQUENCE_CHANCE)):
+    # more sequence chance:
+    if time_passed[time_used] > 0.1 and config["new_sequence_chance"] <= 1 and keys_are_pressed(currently_pressed, lock, config, config['controls']['more_new_sequence_chance']):
         count[time_used] = cur_time
-        config["new_sequence_chance"] *= 1.03
+        config["new_sequence_chance"] *= 1.045
     time_used += 1
 
-    # random char change:
-    if time_passed[time_used] > 0.15 and keyboard.is_pressed(LESS_RANDOM_CHAR):
+    # less random char change:
+    if time_passed[time_used] > 0.15 and keys_are_pressed(currently_pressed, lock, config, config['controls']['less_random_char']):
         count[time_used] = cur_time
         config["random_char_change_chance"] /= 1.05
         if config["random_char_change_chance"] < 0.005:
             config["random_char_change_chance"] = 0
         time_used += 1
 
-    if time_passed[time_used] > 0.15 and config["random_char_change_chance"] <= 1 and keyboard.is_pressed(MORE_RANDOM_CHAR):
+    # more random char change
+    if time_passed[time_used] > 0.15 and config["random_char_change_chance"] <= 1 and keys_are_pressed(currently_pressed, lock, config, config['controls']['more_random_char']):
         count[time_used] = cur_time
         if config["random_char_change_chance"] == 0:
             config["random_char_change_chance"] = 0.005
@@ -585,7 +551,7 @@ def check_keyboard(count, columns, config):
     time_used += 1
 
     # save:
-    if keyboard.is_pressed(SAVE_CONFIG):
+    if keys_are_pressed(currently_pressed, lock, config, config['controls']['save_config']):
         flush_stdin()
         print()
         hide_or_show_cursor(show=True)
@@ -631,7 +597,7 @@ def check_keyboard(count, columns, config):
         clear = True
 
     # load:
-    if keyboard.is_pressed(LOAD_CONFIG):
+    if keys_are_pressed(currently_pressed, lock, config, config['controls']['load_config']):
         flush_stdin()
         print()
         hide_or_show_cursor(show=True)
@@ -690,34 +656,42 @@ def check_keyboard(count, columns, config):
         clear = True
         update_colors = True
     
-    # first color:
-    if keyboard.is_pressed(FIRST_BOLD):
-        parts = config["colors"][0].split('[')
+    # first bold:
+    if keys_are_pressed(currently_pressed, lock, config, config['controls']['first_bold']):
+        colors = list(config["colors"])
+        parts = colors[0].split('[')
         if parts[1][:2] == '1;':
             pass
         else:
             parts[1] = '1;' + parts[1]
-        config["colors"][0] = '['.join(parts)
+        colors[0] = '['.join(parts)
+        config["colors"] = tuple(colors)
         update_colors = True
 
-    if not keyboard.is_pressed('shift') and keyboard.is_pressed(FIRST_WHITE):
-        config["colors"][0] = "\u001b[0m"  # Reset to default white
+    # first white
+    if keys_are_pressed(currently_pressed, lock, config, config['controls']['first_white']):
+        colors = list(config["colors"])
+        colors[0] = "\u001b[0m"  # Reset to default white
+        config["colors"] = tuple(colors)
         update_colors = True
 
-    if keyboard.is_pressed(FIRST_BRIGHT):
+    # first bright
+    if keys_are_pressed(currently_pressed, lock, config, config['controls']['first_bright']):
         first_color, is_bold = parse_ansi_color(config["colors"][1])
+        colors = list(config["colors"])
         r, g, b = first_color
         if r == 255 and 255 not in (g, b):
-            config["colors"][0] = "\u001b[38;2;255;190;190m"
+            colors[0] = "\u001b[38;2;255;190;190m"
         elif g == 255 and 255 not in (r, b):
-            config["colors"][0] = "\u001b[38;2;210;255;210m"
+            colors[0] = "\u001b[38;2;210;255;210m"
         elif g == 255 and b == 255 and r != 255:
-            config["colors"][0] = "\u001b[38;2;225;255;255m"
+            colors[0] = "\u001b[38;2;225;255;255m"
+        config["colors"] = tuple(colors)
         update_colors = True
 
-    # colors
-    if keyboard.is_pressed(RED):
-        config["colors"] = ["\u001b[38;2;255;64;64m",
+    # red
+    if keys_are_pressed(currently_pressed, lock, config, config['controls']['red']):
+        config["colors"] = ("\u001b[38;2;255;64;64m",
                             "\u001b[38;2;255;0;0m",
                             "\u001b[38;2;218;0;0m",
                             "\u001b[38;2;185;0;0m",
@@ -725,11 +699,12 @@ def check_keyboard(count, columns, config):
                             "\u001b[38;2;124;0;0m",
                             "\u001b[38;2;90;0;0m",
                             "\u001b[38;2;56;0;0m",
-                            "\u001b[38;2;30;0;0m"]
+                            "\u001b[38;2;30;0;0m")
         update_colors = True
 
-    if keyboard.is_pressed(GREEN):
-        config["colors"] = ["\u001b[38;2;64;255;64m",
+    # green
+    if keys_are_pressed(currently_pressed, lock, config, config['controls']['green']):
+        config["colors"] = ("\u001b[38;2;64;255;64m",
                             "\u001b[38;2;0;255;0m",
                             "\u001b[38;2;0;218;0m",
                             "\u001b[38;2;0;186;0m",
@@ -737,11 +712,12 @@ def check_keyboard(count, columns, config):
                             "\u001b[38;2;0;122;0m",
                             "\u001b[38;2;0;90;0m",
                             "\u001b[38;2;0;58;0m",
-                            "\u001b[38;2;0;34;0m"]
+                            "\u001b[38;2;0;34;0m")
         update_colors = True
 
-    if not keyboard.is_pressed('shift') and keyboard.is_pressed(BLUE):
-        config["colors"] = ["\u001b[38;2;64;255;255m",
+    # blue
+    if keys_are_pressed(currently_pressed, lock, config, config['controls']['blue']):
+        config["colors"] = ("\u001b[38;2;64;255;255m",
                             "\u001b[38;2;0;255;255m",
                             "\u001b[38;2;0;208;208m",
                             "\u001b[38;2;0;176;176m",
@@ -749,11 +725,11 @@ def check_keyboard(count, columns, config):
                             "\u001b[38;2;0;112;112m",
                             "\u001b[38;2;0;80;80m",
                             "\u001b[38;2;0;48;48m",
-                            "\u001b[38;2;0;24;24m"]
+                            "\u001b[38;2;0;24;24m")
         update_colors = True
 
     # create color:
-    if keyboard.is_pressed(CREATE_COLOR):
+    if keys_are_pressed(currently_pressed, lock, config, config['controls']['create_color']):
         flush_stdin()
         print()
         hide_or_show_cursor(show=True)
@@ -834,7 +810,7 @@ def check_keyboard(count, columns, config):
                     except ValueError:
                         print("RGB values have to be numbers")
                 if make_color:
-                    config['custom_colors'][name] = colors
+                    config['custom_colors'][name] = tuple(colors)
                     print('Color has been added successfully.')
                     input('Press enter to continue...')
 
@@ -873,7 +849,7 @@ def check_keyboard(count, columns, config):
                 if name.lower() in ['exit', 'e']:
                     break
                 if name in config['custom_colors']:
-                    config['colors'] = config['custom_colors'][name].copy()
+                    config['colors'] = config['custom_colors'][name]
                     break
                 else:
                     print("Color wasn't found")
@@ -884,7 +860,7 @@ def check_keyboard(count, columns, config):
 
 
     # background:
-    if keyboard.is_pressed(UPDATE_BACKGROUND_COLORS):
+    if keys_are_pressed(currently_pressed, lock, config, config['controls']['update_background_colors']):
         flush_stdin()
         print()
         hide_or_show_cursor(show=True)
@@ -938,14 +914,16 @@ def check_keyboard(count, columns, config):
         update_colors = True
         clear = True
 
-    # characters:
-    if keyboard.is_pressed(CHARS_01):
+    # chars 01
+    if keys_are_pressed(currently_pressed, lock, config, config['controls']['chars_01']):
         config["characters"] = '01'
 
-    if keyboard.is_pressed(CHARS_ORIGINAL):
+    # chars orig
+    if keys_are_pressed(currently_pressed, lock, config, config['controls']['chars_original']):
         config["characters"] = "ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍｦｲｸｺｿﾁﾄﾉﾌﾤﾨﾛﾝ012345789:.=*+-<>"
 
-    if keyboard.is_pressed(SET_ANY_CHARS):
+    # chars any
+    if keys_are_pressed(currently_pressed, lock, config, config['controls']['set_any_chars']):
         flush_stdin()
         print()
         hide_or_show_cursor(show=True)
@@ -974,7 +952,7 @@ def check_keyboard(count, columns, config):
         clear = True
 
     # sequence speed:
-    if not keyboard.is_pressed('ctrl') and keyboard.is_pressed(CHANGE_SPEED_DIFF):
+    if keys_are_pressed(currently_pressed, lock, config, config['controls']['change_speed_diff']):
         flush_stdin()
         print()
         hide_or_show_cursor(show=True)
@@ -1002,7 +980,7 @@ def check_keyboard(count, columns, config):
         clear = True
 
     # sequence length:
-    if keyboard.is_pressed(CHANGE_SEQ_LENGTH):
+    if keys_are_pressed(currently_pressed, lock, config, config['controls']['change_seq_length']):
         flush_stdin()
         print()
         hide_or_show_cursor(show=True)
@@ -1029,8 +1007,93 @@ def check_keyboard(count, columns, config):
         hide_or_show_cursor(hide=True)
         clear = True
 
-    # print info:
-    if keyboard.is_pressed(CUR_VALUES):
+    # change controls
+    if keys_are_pressed(currently_pressed, lock, config, config['controls']['change_controls']):
+        flush_stdin()
+        print()
+        new_controls = dict()
+        hide_or_show_cursor(show=True)
+        for dict_key in config['controls']:
+            try:
+                new_controls[dict_key] = config['controls'][dict_key].copy()
+            except AttributeError:
+                new_controls[dict_key] = config['controls'][dict_key]
+        save = False
+        print('\nYou have chosen to change your controls')
+        print('\nold/o = show controls without new changes')
+        print('new/n = show controls with new changes')
+        print('save/s = save changes')
+        print('exit/e = exit without chaning controls')
+        while True:
+            go_back = False
+            print('\nEnter the name of the control you would like to change:')
+            control = input('> ').lower().strip()
+            if control in ['o', 'old']:
+                for key in config['controls']:
+                    print(f"{key}: {' '.join(config['controls'][key])}")
+                continue
+            elif control in ['new', 'n']:
+                for key in new_controls:
+                    print(f'{key}: {' '.join(new_controls[key])}')
+                continue
+            elif control in ['save', 's']:
+                save = True
+                break
+            elif control in ['exit', 'e']:
+                break
+            elif control in config['controls'].keys():
+                print("\nEnter the keys you would like to use for this control.")
+                print("If you want this control to be activated by multiple keys, separate them by a space: a b ctrl")
+                print('Using shift is allowed but keep in mind that when you enter "shift a" the control will activate only if you press "a" and then "shift".')
+                print('However, if you enter "shift A" the control will be activated if you press "shift" first and then you press "a"')
+                print('Also make sure to add any keys needed to press your desired key (for example if you need to press "shift" to be able to press "+" make it: "shift +")')
+                print(f"To keep the control the same, just enter the old keys ({' '.join(new_controls[control])})")
+                new_keys = input('> ').strip()
+                if new_keys:
+                    new_keys = new_keys.split(' ')
+                    for new_key in new_keys.copy():
+                        try:
+                            keyboard.is_pressed(new_key)
+                            while new_keys.count(new_key) > 1:
+                                new_keys.remove(new_key)
+                        except Exception as e:
+                            print(f'"{new_key}" can not be used because: {e}')
+                            go_back = True
+                            break
+                    if go_back:
+                        continue
+                    new_controls[control] = new_keys
+
+                    print("""\nControls like "ctrl a" and "a" could both be accidentally used when you press "ctrl" and "a" """)
+                    print("If you don't want this to happen, enter at least one other key of the control that has extra keys.")
+                    print("Keep this empty if you don't want to add any.")
+                    shared_keys = input('> ').strip()
+                    if shared_keys:
+                        shared_keys = shared_keys.split(' ')
+                        for shared_key in shared_keys.copy():
+                            try:
+                                keyboard.is_pressed(shared_key)
+                            except Exception as e:
+                                print(f'"{shared_key}" can not be used because: {e}')
+                                go_back = True
+                                break
+                        if go_back:
+                            continue
+                        new_controls['check_if_pressed'] += shared_keys
+
+                        for key in new_controls['check_if_pressed'].copy():
+                            while new_controls['check_if_pressed'].count(key) > 1:
+                                new_controls['check_if_pressed'].remove(key)
+
+            else:
+                print("Name wasn't found.")
+        if save:
+            config['controls'] = new_controls
+        hide_or_show_cursor(hide=True)
+        clear = True
+
+    # print values:
+    if keys_are_pressed(currently_pressed, lock, config, config['controls']['cur_values']):
         flush_stdin()
         hide_or_show_cursor(show=True)
         print(f'''
@@ -1061,24 +1124,85 @@ background_colors = {config["background_colors"]}
         hide_or_show_cursor(hide=True)
         clear = True
 
-    if keyboard.is_pressed(SHOW_HELP_MESSAGE):
+    # print help
+    if keys_are_pressed(currently_pressed, lock, config, config['controls']['show_help_message']):
         flush_stdin()
         print()
         hide_or_show_cursor(show=True)
-        print(HELP_MESSAGE)
+        print(f'''Controls:
+
+    {', '.join(config['controls']['speed_up'])} = speed up (relative to current speed)
+    {', '.join(config['controls']['slow_down'])} = slow down (relative to current speed)
+
+    {', '.join(config['controls']['change_speed_diff'])} = make some sequences move slower or faster (for example once every 3 frames)
+    {', '.join(config['controls']['change_seq_length'])} = set a new min and max length for sequences
+
+    {', '.join(config['controls']['pause'])} = (un)pause
+    {', '.join(config['controls']['mode_char'])} = toggles if the first letter of a sequence is random and the rest follow or if the sequence remains unchanged
+    {', '.join(config['controls']['auto_size_char'])} = adjusts matrix length and width based on the terminal's size
+    {', '.join(config['controls']['make_space_between_columns'])} = create an empty columns in between all columns
+    {', '.join(config['controls']['change_visibility_priority'])} = changes priority of displaying sequences on the same row if sequences have the same brightness
+
+    {', '.join(config['controls']['more_random_char'])} = increase chance for characters to change mid-sequence
+    {', '.join(config['controls']['less_random_char'])} = decrease chance for characters to change mid-sequence
+              
+    {', '.join(config['controls']['shorten_length'])} = shorten matrix length (rows)
+    {', '.join(config['controls']['increase_length'])} = increase matrix length (rows)
+    {', '.join(config['controls']['less_columns'])} = reduce number of columns
+    {', '.join(config['controls']['more_columns'])} = increase number of columns
+              
+    {', '.join(config['controls']['more_new_sequence_chance'])} = increase the chance of a new sequence starting (relative to current chance)
+    {', '.join(config['controls']['less_new_sequence_chance'])} = decrease the chance of a new sequence starting (relative to current chance)
+
+    {', '.join(config['controls']['first_bold'])} = make the first character bold
+    {', '.join(config['controls']['first_white'])} = make first character white
+    {', '.join(config['controls']['first_bright'])} = make first character white but in the shade of the other colors
+    {', '.join(config['controls']['blue'])} = change color to blue
+    {', '.join(config['controls']['green'])} = change color to green
+    {', '.join(config['controls']['red'])} = change color to red
+    {', '.join(config['controls']['update_background_colors'])} = create a background by making some sequences less bright
+    {', '.join(config['controls']['create_color'])} = create a new color or use your created colors
+              
+    {', '.join(config['controls']['chars_01'])} = change characters to "01"
+    {', '.join(config['controls']['chars_original'])} = reset characters to original set
+    {', '.join(config['controls']['set_any_chars'])} = prompt for input to add or replace characters
+
+    {', '.join(config['controls']['save_config'])} = save current values (TIME_BETWEEN_FRAMES...)
+    {', '.join(config['controls']['load_config'])} = load values from a file
+    
+    {', '.join(config['controls']['change_controls'])} = change your controls
+    {', '.join(config['controls']['cur_values'])} = display current values
+    {', '.join(config['controls']['remove_controls'])} = disable keyboard controls temporarily
+    {', '.join(config['controls']['return_controls'])} = re-enable keyboard controls
+              
+    ctrl+c = stop matrix rain
+''')
         input('Press enter to continue...')
         hide_or_show_cursor(hide=True)
         clear = True
 
     # remove controls:
-    if keyboard.is_pressed(REMOVE_CONTROLS):
-        return 'stop', columns, clear, update_colors
+    if keys_are_pressed(currently_pressed, lock, config, config['controls']['remove_controls']):
+        config['controls_activated'] = False
 
     return count, columns, clear, update_colors
 
 
+# ______________________on_key_event______________________ ######## move above check_keys
+def on_key_event(currently_pressed, event, lock):
+    try:
+        with lock:
+            if event.event_type == 'down':
+                currently_pressed.add(event.name)
+            if event.event_type == 'up':
+                currently_pressed.discard(event.name.lower())
+                currently_pressed.discard(event.name.upper())
+    except KeyboardInterrupt:
+        pass
+
+
 # ______________________clear_if_necessary______________________
-def clear_if_necessary(clear, old_terminal_size, config):
+def clear_if_necessary(clear, config, terminal_size=None, old_terminal_size=None):
     """
     Clear the terminal screen if necessary.
 
@@ -1087,12 +1211,13 @@ def clear_if_necessary(clear, old_terminal_size, config):
         old_terminal_size (int): Previous terminal line count.
         config (dict): Configuration dictionary with display parameters.
     """
-    terminal_lines = os.get_terminal_size().lines
-    if old_terminal_size != terminal_lines:
+    if not (terminal_size and old_terminal_size):
+        return
+    
+    if old_terminal_size != terminal_size:
         clear = True
 
-    terminal_size = terminal_lines
-    if terminal_size <= config["amount_of_rows"]:
+    if terminal_size.lines <= config["amount_of_rows"] * (1 + (config["amount_of_columns"] - 1) // terminal_size.columns):
         clear = True
 
     if clear:
@@ -1100,7 +1225,7 @@ def clear_if_necessary(clear, old_terminal_size, config):
 
 
 # ______________________adjust_size______________________
-def adjust_size(columns, clear, config):
+def adjust_size(columns, config, terminal_size=None):
     """
     Adjust AMOUNT_OF_ROWS and AMOUNT_OF_COLUMNS based on the current terminal size.
 
@@ -1112,16 +1237,9 @@ def adjust_size(columns, clear, config):
     Returns:
         tuple: Updated columns list and clear flag.
     """
-    terminal_size = os.get_terminal_size()
-    terminal_lines, terminal_columns = terminal_size.lines, terminal_size.columns
-
-    config["amount_of_rows"] = terminal_lines - 1
-    config["amount_of_columns"] = terminal_columns
-
-    if len(columns) != config["amount_of_columns"]:
-        clear = True
-
-    return columns, clear
+    if terminal_size:
+        config["amount_of_rows"] = terminal_size.lines - 1
+        config["amount_of_columns"] = terminal_size.columns
 
 
 # ______________________get_config______________________
@@ -1168,11 +1286,18 @@ def get_config(file_name=CONFIG_FILE, dir_name=CONFIG_DIR_NAME):
                         config['file_is_valid'] = True
                         config['folder_is_valid'] = folder_is_valid
                         config['file_name'] = file_name
-                        try:
-                            config['background_colors']
-                        except KeyError:
-                            config['background_colors'] = {}
+                        config['background_colors'] = {}
+                        config['colors'] = tuple(config['colors'])
+                        
+                        for key in config['custom_colors']:
+                            config['custom_colors'][key] = tuple(config['custom_colors'][key])
+
                         hide_or_show_cursor(hide=True)
+                        for control in config['controls'].copy():
+                            try:
+                                config['controls'][control] = config['controls'][control].split(' ')
+                            except AttributeError:
+                                pass
                         return config
                     
                 except pathvalidate.ValidationError as e:
@@ -1185,7 +1310,15 @@ def get_config(file_name=CONFIG_FILE, dir_name=CONFIG_DIR_NAME):
         print('The global variables will be used instead.')
         input('Press enter to continue...')
     hide_or_show_cursor(hide=True)
+
+    controls = CONTROLS.copy()
+    for control in controls.copy():
+        try:
+            controls[control] = controls[control].split(' ')
+        except AttributeError:
+            pass
     return {
+        "controls": controls,
         "new_sequence_chance": NEW_SEQUENCE_CHANCE,
         "random_char_change_chance": RANDOM_CHAR_CHANGE_CHANCE,
         "time_between_frames": TIME_BETWEEN_FRAMES,
@@ -1200,7 +1333,7 @@ def get_config(file_name=CONFIG_FILE, dir_name=CONFIG_DIR_NAME):
         "space_between_columns": SPACE_BETWEEN_COLUMNS,
         "visibility_priority": VISIBILITY_PRIORITY,
         "characters": CHARACTERS,
-        "colors": COLORS.copy(),
+        "colors": COLORS,
         "custom_colors": {},
         'background_brightness_reduction': [0.7],
         'background_colors': {},
@@ -1208,7 +1341,8 @@ def get_config(file_name=CONFIG_FILE, dir_name=CONFIG_DIR_NAME):
         "extended_color_cache": collections.OrderedDict(),
         'file_is_valid': False,
         'folder_is_valid': folder_is_valid,
-        'file_name': file_name
+        'file_name': file_name,
+        "controls_activated": True
     }
 
 
@@ -1235,12 +1369,20 @@ def save_config(config, update=False):
 
     s_config = {}
     for key in config:
-        s_config[key] = config[key]
+        try:
+            s_config[key] = config[key].copy()
+        except AttributeError:
+            s_config[key] = config[key]
     s_config.pop('extended_color_cache', None)
     s_config.pop('background_colors', None)
     s_config.pop('file_name', None)
     s_config.pop('folder_is_valid', None)
     s_config.pop('file_is_valid', None)
+    for control in s_config['controls'].copy():
+        try:
+            s_config['controls'][control] = ' '.join(s_config['controls'][control])
+        except AttributeError:
+            pass
 
     if update:
         file_name = config['file_name']
@@ -1270,7 +1412,8 @@ def save_config(config, update=False):
 
         while True:
             print(f'\nDo you want to save to "{file_name}"?')
-            print('Enter "n" or "no" to create a new name.')
+            print('yes/y = save to this file')
+            print('no/n = create a new name')
             make_custom_name = input(f'> ').lower().strip()
 
             if make_custom_name in ['y', 'yes']:
@@ -1325,51 +1468,73 @@ def run_matrix():
 
         columns = [[] for _ in range(config["amount_of_columns"])]
         count = [time.time() for _ in range(15)]
-        old_terminal_size = os.get_terminal_size().lines
+        try:
+            old_terminal_size = os.get_terminal_size()
+        except OSError:
+            old_terminal_size = None
         clear = True
         update_colors = True
         hide_or_show_cursor(hide=True)
 
+        currently_pressed = set()
+        lock = threading.Lock()
+        keyboard.hook(lambda event: on_key_event(currently_pressed, event, lock))
+
         while True:
             start_time = time.time()
+            try:
+                terminal_size = os.get_terminal_size()
+            except OSError:
+                terminal_size = None
 
             if update_colors:
                 update_sequence_and_background_colors(config, columns)
 
-            if config["auto_size"]:
-                columns, clear = adjust_size(columns, clear, config)
+            if config["auto_size"] and terminal_size:
+                adjust_size(columns, config, terminal_size)
 
             columns, clear = update_columns(columns, config, clear)
 
             rows = "\n".join(columns_to_rows(columns, config))
 
-            clear_if_necessary(clear, old_terminal_size, config)
+            clear_if_necessary(clear, config, terminal_size, old_terminal_size)
+            old_terminal_size = terminal_size
             clear = False
-            old_terminal_size = os.get_terminal_size().lines
 
             sys.stdout.write("\u001b[H" + rows + "\n")
             sys.stdout.flush()
 
             while True:
-                if count != 'stop':
-                    count, columns, check_clear, check_update_colors = check_keyboard(count, columns, config)
+                if config['controls_activated']:
+                    count, columns, check_clear, check_update_colors = check_keys(currently_pressed, lock, count, columns, config)
                     if check_clear:
                         clear = True
                     if check_update_colors:
                         update_colors = True
-                elif keyboard.is_pressed(RETURN_CONTROLS):
-                    count = [time.time() for _ in range(15)]
+                elif keys_are_pressed(currently_pressed, lock, config, config['controls']['return_controls']):
+                    config['controls_activated'] = True
 
                 if time.time() - start_time > config["time_between_frames"]:
                     break
-                time.sleep(max(0.001, min(config['time_between_frames']/5, 0.01)))
+                time.sleep(0.001)
 
     except KeyboardInterrupt:
         pass
     finally:
-        flush_stdin()
-        hide_or_show_cursor(show=True)
-        print('\nMatrix rain stopped')
+        i = 0
+        while True:
+            i += 1
+            print(i)
+            if i > 100:
+                break
+            try:
+                flush_stdin()
+                hide_or_show_cursor(show=True)
+                print('\nMatrix rain stopped')
+            except KeyboardInterrupt:
+                continue
+            finally:
+                break
 
 
 if __name__ == '__main__':
