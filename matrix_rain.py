@@ -677,8 +677,8 @@ def check_keys(currently_pressed, lock, count, columns, config):
 
     # first bright
     if keys_are_pressed(currently_pressed, lock, config, config['controls']['first_bright']):
-        first_color, is_bold = parse_ansi_color(config["colors"][1])
         colors = list(config["colors"])
+        first_color, is_bold = parse_ansi_color(colors[1])
         r, g, b = first_color
         if r == 255 and 255 not in (g, b):
             colors[0] = "\u001b[38;2;255;190;190m"
@@ -1521,20 +1521,9 @@ def run_matrix():
     except KeyboardInterrupt:
         pass
     finally:
-        i = 0
-        while True:
-            i += 1
-            print(i)
-            if i > 100:
-                break
-            try:
-                flush_stdin()
-                hide_or_show_cursor(show=True)
-                print('\nMatrix rain stopped')
-            except KeyboardInterrupt:
-                continue
-            finally:
-                break
+        flush_stdin()
+        hide_or_show_cursor(show=True)
+        print('\nMatrix rain stopped')
 
 
 if __name__ == '__main__':
