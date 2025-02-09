@@ -4,11 +4,22 @@ import random
 import collections
 import threading
 
-print('\u001b[H')
-print('\u001b[H')
-print('\u001b[H')
-print('\u001b[2J')
+def fun(a):
+    pass
 
+keyboard.hook(fun)
+
+i = time.time()
+try:
+    while True:
+        try:
+            if time.time() - i > 10:
+                break
+            time.sleep(0.1)
+        except KeyboardInterrupt:
+            pass
+except KeyboardInterrupt:
+    print('here')
 
 
 

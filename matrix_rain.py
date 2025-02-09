@@ -13,32 +13,35 @@ import threading
 
 # if you saved your config in a file you can load it by putting the file name here
 # if you want to use the global variables, keep this variable as an emtpy string
-CONFIG_FILE = 'config1'
+CONFIG_FILE = 'base_config'
 
 
 CONFIG_DIR_NAME = 'config' # this shouldn't be changed
 
 
 # Global constants (control keys, help messages, etc.) remain unchanged.
-NEW_SEQUENCE_CHANCE = 0.02
-RANDOM_CHAR_CHANGE_CHANCE = 0
+NEW_SEQUENCE_CHANCE = 0.018
+RANDOM_CHAR_CHANGE_CHANCE = 0.01
 TIME_BETWEEN_FRAMES = 0.045
 
 MIN_SEQUENCE_LENGTH = 3
-MAX_SEQUENCE_LENGTH = 15 
+MAX_SEQUENCE_LENGTH = 20
 
-MIN_SEQUENCE_SPEED = 0.3  # 1/sequence_speed = frames to move the sequence; sequence_speed has a range from MIN_SEQUENCE_SPEED to MAX_SEQUENCE_SPEED
-MAX_SEQUENCE_SPEED = 1
+MIN_SEQUENCE_SPEED = 0.2  # 1/sequence_speed = frames to move the sequence; sequence_speed has a range from MIN_SEQUENCE_SPEED to MAX_SEQUENCE_SPEED
+MAX_SEQUENCE_SPEED = 0.8
 
-AMOUNT_OF_COLUMNS = 150
+AMOUNT_OF_COLUMNS = 140
 AMOUNT_OF_ROWS = 20
 
-SPACE_BETWEEN_COLUMNS = False
+SPACE_BETWEEN_COLUMNS = True
 MODE = True  # If True, the first letter of a sequence is random and the rest follow; otherwise the sequence remains unchanged.
 AUTO_SIZE = False
 VISIBILITY_PRIORITY = 'higher'
 
 CHARACTERS = "ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍｦｲｸｺｿﾁﾄﾉﾌﾤﾨﾛﾝ012345789:.=*+-<>"
+
+BACKGROUND_BRIGHTNESS_REDUCTION = [0.6]
+BACKGROUND_CHANCE = 0.5
 
 # Green gradient colors (8 shades, from brightest to darkest)
 COLORS = (
@@ -53,7 +56,6 @@ COLORS = (
     "\u001b[38;2;0;24;0m"     # Very dark green
 )
 
-BACKGROUND_CHANCE = 0.4
 
 # Control key assignments:
 CONTROLS = {
@@ -64,11 +66,11 @@ CONTROLS = {
     "mode_char": "q",
     "auto_size_char": "a",
     "make_space_between_columns": "shift space",
-    "change_visibility_priority": "3",
+    "change_visibility_priority": "v",
     "more_random_char": "shift up",
     "less_random_char": "shift down",
-    "shorten_length": "up",
-    "increase_length": "down",
+    "less_rows": "up",
+    "more_rows": "down",
     "less_columns": "left",
     "more_columns": "right",
     "more_new_sequence_chance": "shift +",
@@ -79,19 +81,19 @@ CONTROLS = {
     "blue": "b",
     "green": "g",
     "red": "r",
-    "update_background_colors": "n",
-    "create_color": "7",
+    "change_background_brightness": "8",
+    "create_color": "9",
     "change_seq_length": "l",
     "chars_01": "0",
     "chars_original": "1",
-    "set_any_chars": "9",
+    "set_any_chars": "2",
     "change_controls": "shift C",
     "show_help_message": "h",
-    "cur_values": "v",
+    "cur_values": "shift H",
     "save_config": "S shift",
     "load_config": "L shift",
-    "remove_controls": "shift backspace",
-    "return_controls": "ctrl shift enter",
+    "disable_controls": "shift backspace",
+    "enable_controls": "ctrl shift enter",
     "check_if_pressed": "shift ctrl"
     }
 
@@ -100,10 +102,6 @@ CONTROLS = {
 def hide_or_show_cursor(hide=False, show=False):
     """
     Hide or show the terminal cursor.
-
-    Args:
-        hide (bool): If True, hides the cursor.
-        show (bool): If True, shows the cursor.
     """
     if hide:
         sys.stdout.write("\u001b[?25l")
@@ -116,7 +114,7 @@ def hide_or_show_cursor(hide=False, show=False):
 # ______________________flush_stdin______________________
 def flush_stdin():
     """
-    Flush the standard input buffer.
+    Flush the standard input buffer to remove any pending keyboard input.
     """
     if os.name == 'nt':
         import msvcrt
@@ -130,13 +128,14 @@ def flush_stdin():
 # ______________________parse_ansi_color______________________
 def parse_ansi_color(ansi):
     """
-    Parse an ANSI color escape code and return its RGB representation.
+    Parse an ANSI color escape code and return its RGB components and bold status.
 
     Args:
         ansi (str): ANSI escape code string, e.g. "\u001b[38;2;R;G;Bm".
 
     Returns:
-        tuple: A tuple (R, G, B) of integer color values. Returns (255, 255, 255) for the reset code.
+        tuple: A tuple ((R, G, B), is_bold) where (R, G, B) are integers representing the color
+               and is_bold is a boolean indicating if the ANSI code includes a bold attribute.
     """
     is_bold = False
     if ansi == "\u001b[0m":
@@ -157,16 +156,16 @@ def parse_ansi_color(ansi):
 # ______________________extend_colors______________________
 def extend_colors(original_colors, new_length, config):
     """
-    Return a color gradient of new_length using linear interpolation.
-    Uses caching stored in config["extended_color_cache"].
+    Generate an extended color gradient of a specified length by linearly interpolating between the given colors.
+    Utilizes caching stored in config["extended_color_cache"] to avoid redundant computations.
 
     Args:
-        original_colors (list): List of ANSI color escape codes.
-        new_length (int): Desired length of the extended color list.
-        config (dict): Configuration dictionary containing the cache.
+        original_colors (list or tuple): Sequence of ANSI color escape codes.
+        new_length (int): Desired number of colors in the extended gradient.
+        config (dict): Configuration dictionary containing the extended_color_cache.
 
     Returns:
-        list: A list of ANSI escape codes representing the extended gradient.
+        list: List of ANSI color escape codes representing the extended gradient.
     """
     max_cache_size = 250
     key = (tuple(original_colors), new_length)
@@ -214,13 +213,20 @@ def extend_colors(original_colors, new_length, config):
 # ______________________make_sequence______________________
 def make_sequence(config):
     """
-    Create a new sequence for a column using parameters from config.
+    Create a new sequence for a column based on the provided configuration parameters.
+
+    The sequence is a dictionary containing:
+      - 'chars': List of characters forming the sequence.
+      - 'final_char': The current (float) vertical position of the sequence's head.
+      - 'speed': The falling speed of the sequence.
+      - 'colors': The color scheme used for the sequence.
+      - 'colors_extended': A placeholder for the extended color gradient.
 
     Args:
         config (dict): Configuration dictionary with sequence parameters.
 
     Returns:
-        dict: A dictionary representing a sequence with its characters, current final character position, and speed.
+        dict: A dictionary representing the newly created sequence.
     """
     seq_length = random.randint(config["min_sequence_length"], config["max_sequence_length"])
     if random.random() > config['background_chance']:
@@ -237,14 +243,17 @@ def make_sequence(config):
 # ______________________columns_to_rows______________________
 def columns_to_rows(columns, config):
     """
-    Convert columns of sequences into rows for terminal display.
+    Convert a list of columns (each containing sequences) into rows for terminal display.
+
+    For each row, the function determines which character from which sequence should be visible based on its
+    vertical position and brightness.
 
     Args:
-        columns (list): List of columns, each containing sequences.
+        columns (list): List of columns, where each column is a list of sequence dictionaries.
         config (dict): Configuration dictionary containing display parameters.
 
     Returns:
-        list: A list of strings, each representing a row to be displayed in the terminal.
+        list: List of strings, each representing a row to be printed on the terminal.
     """
     rows = []
     for row_index in range(config["amount_of_rows"]):
@@ -310,14 +319,17 @@ def columns_to_rows(columns, config):
 # ______________________update_column______________________
 def update_column(column, config):
     """
-    Update a single column of sequences using config parameters.
+    Update the sequences in a single column based on their speed and configuration parameters.
+
+    Sequences that have moved completely off the visible area are removed.
+    If a sequence has advanced sufficiently, it may also trigger the creation of a new sequence.
 
     Args:
-        column (list): A list of sequences in the column.
+        column (list): A list of sequence dictionaries for the column.
         config (dict): Configuration dictionary with sequence and display parameters.
 
     Returns:
-        list: The updated list of sequences for the column.
+        list: Updated list of sequence dictionaries for the column.
     """
     new_column = []
     if len(column) == 0: # if the column is empty, create a new sequence with some probability
@@ -358,6 +370,21 @@ def update_column(column, config):
 
 # ______________________update_columns______________________
 def update_columns(columns, config, clear):
+    """
+    Update the list of columns by adjusting the number of columns and updating each column's sequences.
+
+    This function ensures that the number of columns matches config["amount_of_columns"] and applies
+    update_column to each visible column.
+
+    Args:
+        columns (list): List of current columns (each a list of sequences).
+        config (dict): Configuration dictionary with display parameters.
+        clear (bool): Flag indicating if a screen clear is requested.
+
+    Returns:
+        tuple: A tuple (new_columns, clear) where new_columns is the updated list of columns and
+               clear is a flag indicating if the screen should be cleared.
+    """
     # remove or add columns if config["amount_of_columns"] changed
     if len(columns) > config["amount_of_columns"]:
         columns = columns[:config["amount_of_columns"]]
@@ -380,6 +407,19 @@ def update_columns(columns, config, clear):
 
 # ______________________update_background______________________
 def update_sequence_and_background_colors(config, columns):
+    """
+    Update the color settings for sequences and backgrounds based on the current configuration.
+
+    This function recalculates background colors by reducing brightness and updates existing sequences
+    to use the new colors if applicable.
+
+    Args:
+        config (dict): Configuration dictionary with color parameters.
+        columns (list): List of columns containing sequences.
+
+    Returns:
+        None
+    """
     old_background_colors = list(config['background_colors'].keys())
     config['background_colors'] = {}
     make_random = False
@@ -416,6 +456,17 @@ def update_sequence_and_background_colors(config, columns):
 
 # ______________________on_key_event______________________
 def on_key_event(currently_pressed, event, lock):
+    """
+    Callback function to handle keyboard events and update the set of currently pressed keys.
+
+    Args:
+        currently_pressed (set): A set containing the names of keys currently pressed.
+        event: Keyboard event object.
+        lock (threading.Lock): Lock object to ensure thread-safe updates.
+
+    Returns:
+        None
+    """
     try:
         with lock:
             if event.event_type == 'down':
@@ -429,6 +480,18 @@ def on_key_event(currently_pressed, event, lock):
 
 # ______________________check_key______________________
 def keys_are_pressed(currently_pressed, lock, config, keys):
+    """
+    Check if the specified keys are currently pressed, ensuring that unwanted keys are not pressed.
+
+    Args:
+        currently_pressed (set): Set of keys currently pressed.
+        lock (threading.Lock): Lock object for thread-safe access.
+        config (dict): Configuration dictionary, which includes keys that should not be pressed if they aren't in keys.
+        keys (list): List of keys that are required to be pressed.
+
+    Returns:
+        bool: True if all required keys are pressed and none of the unwanted keys are pressed; False otherwise.
+    """
     with lock:
         # prevents accidentally using multiple controls that share keys
         for prevent_key in config['controls']['check_if_pressed']:
@@ -444,15 +507,24 @@ def keys_are_pressed(currently_pressed, lock, config, keys):
 # ______________________check_keyboard______________________
 def check_keys(currently_pressed, lock, count, columns, config):
     """
-    Check keyboard input and update config (and column data) accordingly.
+    Check keyboard input and update configuration and column data based on key presses.
+
+    This function processes various keyboard inputs to adjust parameters such as speed, sequence chance,
+    color settings, and more.
 
     Args:
-        count (list): List of timestamps for debouncing various key inputs.
-        columns (list): List of current columns of sequences.
-        config (dict): Configuration dictionary with parameters.
+        currently_pressed (set): Set of keys currently pressed.
+        lock (threading.Lock): Lock for thread-safe operations on currently_pressed.
+        count (list): List of timestamps for debouncing key inputs.
+        columns (list): List of current columns containing sequences.
+        config (dict): Configuration dictionary with various parameters.
 
     Returns:
-        tuple: Either (updated_count, updated_columns, clear_flag) or ('stop', columns, clear_flag) if controls are disabled.
+        tuple: (count, columns, clear, update_colors)
+               - count: Updated list of timestamps.
+               - columns: Updated columns after key processing.
+               - clear (bool): Flag indicating if the screen should be cleared.
+               - update_colors (bool): Flag indicating if a color update is needed.
     """
     cur_time = time.time()
     time_passed = [cur_time - t for t in count]
@@ -464,7 +536,7 @@ def check_keys(currently_pressed, lock, count, columns, config):
         raise KeyboardInterrupt
     
     # more speed:
-    if time_passed[time_used] > 0.08 and keys_are_pressed(currently_pressed, lock, config, config['controls']['speed_up']):
+    if time_passed[time_used] > 0.08 and config['time_between_frames'] > 0.001 and keys_are_pressed(currently_pressed, lock, config, config['controls']['speed_up']):
         count[time_used] = cur_time
         config["time_between_frames"] /= 1.03
     time_used += 1
@@ -515,14 +587,14 @@ def check_keys(currently_pressed, lock, count, columns, config):
     time_used += 1
 
     # less rows:
-    if time_passed[time_used] > 0.09 and config["amount_of_rows"] > 0 and keys_are_pressed(currently_pressed, lock, config, config['controls']['shorten_length']):
+    if time_passed[time_used] > 0.09 and config["amount_of_rows"] > 0 and keys_are_pressed(currently_pressed, lock, config, config['controls']['less_rows']):
         count[time_used] = cur_time
         config["amount_of_rows"] -= 1
         clear = True
     time_used += 1
 
     # more rows
-    if time_passed[time_used] > 0.09 and config["amount_of_rows"] < 80 and keys_are_pressed(currently_pressed, lock, config, config['controls']['increase_length']):
+    if time_passed[time_used] > 0.09 and config["amount_of_rows"] < 100 and keys_are_pressed(currently_pressed, lock, config, config['controls']['more_rows']):
         count[time_used] = cur_time
         config["amount_of_rows"] += 1
         clear = True
@@ -536,7 +608,7 @@ def check_keys(currently_pressed, lock, count, columns, config):
     time_used += 1
 
     # more columns:
-    if time_passed[time_used] > 0.05 and config["amount_of_columns"] < 200 and keys_are_pressed(currently_pressed, lock, config, config['controls']['more_columns']):
+    if time_passed[time_used] > 0.05 and config["amount_of_columns"] < 220 and keys_are_pressed(currently_pressed, lock, config, config['controls']['more_columns']):
         count[time_used] = cur_time
         config["amount_of_columns"] += 1
         clear = True
@@ -880,7 +952,7 @@ def check_keys(currently_pressed, lock, count, columns, config):
 
 
     # background:
-    if keys_are_pressed(currently_pressed, lock, config, config['controls']['update_background_colors']):
+    if keys_are_pressed(currently_pressed, lock, config, config['controls']['change_background_brightness']):
         flush_stdin()
         print()
         hide_or_show_cursor(show=True)
@@ -1118,21 +1190,22 @@ def check_keys(currently_pressed, lock, count, columns, config):
         flush_stdin()
         hide_or_show_cursor(show=True)
         print(f'''
-new_sequence_chance = {round(config["new_sequence_chance"], 4)} (Chance for a column to reset when empty; range: 0 to 1)
+new_sequence_chance = {round(config["new_sequence_chance"], 4)} (Chance for a new sequence to start if there is space; range: 0 to 1)
 random_char_change_chance = {round(config["random_char_change_chance"], 4)} (Chance for characters to change mid-sequence)
 
 time_between_frames = {round(config["time_between_frames"], 4)} (Delay between frame updates)
+
 min_sequence_speed = {round(config["min_sequence_speed"], 4)} (1/sequence_speed = frames to move the sequence)
 max_sequence_speed = {round(config["max_sequence_speed"], 4)} (range(speed): MIN_SEQUENCE_SPEED to MAX_SEQUENCE_SPEED)
+
+min_sequence_length = {config["min_sequence_length"]}
+max_sequence_length = {config["max_sequence_length"]}
 
 AMOUNT_OF_COLUMNS = {config["amount_of_columns"]}
 AMOUNT_OF_ROWS = {config["amount_of_rows"]}
 
-max_sequence_length = {config["max_sequence_length"]}
-min_sequence_length = {config["min_sequence_length"]}
-
 mode = {config["mode"]} (Toggle for sequence update behavior)
-auto_size = {config["auto_size"]} (Toggle for automatic resizing)
+auto_size = {config["auto_size"]} (Toggle for automatic resizing of columns and rows)
 space_between_columns = {config['space_between_columns']}
 visibility_priority = {config['visibility_priority']}
 
@@ -1151,6 +1224,9 @@ background_colors = {config["background_colors"]}
         print()
         hide_or_show_cursor(show=True)
         print(f'''Controls:
+    
+    {', '.join(config['controls']['show_help_message'])} = show help message
+    {', '.join(config['controls']['cur_values'])} = display current values
 
     {', '.join(config['controls']['speed_up'])} = speed up (relative to current speed)
     {', '.join(config['controls']['slow_down'])} = slow down (relative to current speed)
@@ -1161,14 +1237,14 @@ background_colors = {config["background_colors"]}
     {', '.join(config['controls']['pause'])} = (un)pause
     {', '.join(config['controls']['mode_char'])} = toggles if the first letter of a sequence is random and the rest follow or if the sequence remains unchanged
     {', '.join(config['controls']['auto_size_char'])} = adjusts matrix length and width based on the terminal's size
-    {', '.join(config['controls']['make_space_between_columns'])} = create an empty columns in between all columns
-    {', '.join(config['controls']['change_visibility_priority'])} = changes priority of displaying sequences on the same row if sequences have the same brightness
+    {', '.join(config['controls']['make_space_between_columns'])} = create a space in between all columns
+    {', '.join(config['controls']['change_visibility_priority'])} = changes priority of displaying sequences on the same row if the sequences have the same brightness
 
     {', '.join(config['controls']['more_random_char'])} = increase chance for characters to change mid-sequence
     {', '.join(config['controls']['less_random_char'])} = decrease chance for characters to change mid-sequence
               
-    {', '.join(config['controls']['shorten_length'])} = shorten matrix length (rows)
-    {', '.join(config['controls']['increase_length'])} = increase matrix length (rows)
+    {', '.join(config['controls']['less_rows'])} = shorten matrix length (rows)
+    {', '.join(config['controls']['more_rows'])} = increase matrix length (rows)
     {', '.join(config['controls']['less_columns'])} = reduce number of columns
     {', '.join(config['controls']['more_columns'])} = increase number of columns
               
@@ -1177,24 +1253,23 @@ background_colors = {config["background_colors"]}
 
     {', '.join(config['controls']['first_bold'])} = make the first character bold
     {', '.join(config['controls']['first_white'])} = make first character white
-    {', '.join(config['controls']['first_bright'])} = make first character white but in the shade of the other colors
+    {', '.join(config['controls']['first_bright'])} = make first character white but in the shade of the other colors (doesn't work for custom colors)
     {', '.join(config['controls']['blue'])} = change color to blue
     {', '.join(config['controls']['green'])} = change color to green
     {', '.join(config['controls']['red'])} = change color to red
-    {', '.join(config['controls']['update_background_colors'])} = create a background by making some sequences less bright
     {', '.join(config['controls']['create_color'])} = create a new color or use your created colors
+    {', '.join(config['controls']['change_background_brightness'])} = create a background by making some sequences less bright
               
     {', '.join(config['controls']['chars_01'])} = change characters to "01"
     {', '.join(config['controls']['chars_original'])} = reset characters to original set
     {', '.join(config['controls']['set_any_chars'])} = prompt for input to add or replace characters
 
-    {', '.join(config['controls']['save_config'])} = save current values (TIME_BETWEEN_FRAMES...)
-    {', '.join(config['controls']['load_config'])} = load values from a file
-    
+    {', '.join(config['controls']['save_config'])} = save current values and controls (rows, color...)
+    {', '.join(config['controls']['load_config'])} = load values and controls from a file
+
     {', '.join(config['controls']['change_controls'])} = change your controls
-    {', '.join(config['controls']['cur_values'])} = display current values
-    {', '.join(config['controls']['remove_controls'])} = disable keyboard controls temporarily
-    {', '.join(config['controls']['return_controls'])} = re-enable keyboard controls
+    {', '.join(config['controls']['disable_controls'])} = disable keyboard controls temporarily
+    {', '.join(config['controls']['enable_controls'])} = re-enable keyboard controls
               
     ctrl+c = stop matrix rain
 ''')
@@ -1203,7 +1278,7 @@ background_colors = {config["background_colors"]}
         clear = True
 
     # remove controls:
-    if keys_are_pressed(currently_pressed, lock, config, config['controls']['remove_controls']):
+    if keys_are_pressed(currently_pressed, lock, config, config['controls']['disable_controls']):
         config['controls_activated'] = False
 
     return count, columns, clear, update_colors
@@ -1344,7 +1419,7 @@ def get_config(file_name=CONFIG_FILE, dir_name=CONFIG_DIR_NAME):
         "characters": CHARACTERS,
         "colors": COLORS,
         "custom_colors": {},
-        'background_brightness_reduction': [0.7],
+        'background_brightness_reduction': BACKGROUND_BRIGHTNESS_REDUCTION,
         'background_colors': {},
         'background_chance': BACKGROUND_CHANCE,
         "extended_color_cache": collections.OrderedDict(),
@@ -1526,20 +1601,27 @@ def run_matrix():
                         clear = True
                     if check_update_colors:
                         update_colors = True
-                elif keys_are_pressed(currently_pressed, lock, config, config['controls']['return_controls']):
+                elif keys_are_pressed(currently_pressed, lock, config, config['controls']['enable_controls']):
                     config['controls_activated'] = True
 
+                time.sleep(0.001)
                 if time.time() - start_time > config["time_between_frames"]:
                     break
-                time.sleep(0.001)
 
     except KeyboardInterrupt:
-        pass
+        t = time.time()
+        while True:
+            try:
+                if time.time() - t > 0.1:
+                    break
+                time.sleep(0.1)
+            except KeyboardInterrupt:
+                continue
     finally:
+        keyboard.unhook_all()
         flush_stdin()
         hide_or_show_cursor(show=True)
         print('\nMatrix rain stopped')
-
 
 if __name__ == '__main__':
     run_matrix()
