@@ -4,6 +4,17 @@ import random
 import collections
 import threading
 
+print('\u001b[H')
+print('\u001b[H')
+print('\u001b[H')
+print('\u001b[2J')
+
+
+
+
+
+
+"""
 def on_event(event, keys, lock):
     with lock:
         if event.event_type == 'down':
@@ -67,7 +78,7 @@ def main():
         time.sleep(0.2)
 
 main()
-
+"""
 """
 # Global state for currently pressed keys
 currently_pressed = set()
