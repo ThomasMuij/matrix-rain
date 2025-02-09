@@ -1313,12 +1313,12 @@ def adjust_size(columns, config, terminal_size=None):
     Adjust AMOUNT_OF_ROWS and AMOUNT_OF_COLUMNS based on the current terminal size.
 
     Args:
-        columns (list): Current list of columns.
-        clear (bool): Clear flag indicating if a clear is needed.
-        config (dict): Configuration dictionary with display parameters.
+        columns (list): Current columns (unused).
+        config (dict): Configuration settings.
+        terminal_size (os.terminal_size, optional): Current terminal size.
 
     Returns:
-        tuple: Updated columns list and clear flag.
+        None
     """
     if terminal_size:
         # - 1 ensures that constant clearing doesn't happen and that typing into the terminal doesn't cause issues by moving it
@@ -1329,14 +1329,17 @@ def adjust_size(columns, config, terminal_size=None):
 # ______________________get_config______________________
 def get_config(file_name=CONFIG_FILE, dir_name=CONFIG_DIR_NAME):
     """
-    Retrieve configuration settings from a JSON file if available, otherwise return default values.
+    Load configuration from a JSON file or return default settings.
+
+    Validates the folder and file names. If the file is valid and found, loads it;
+    otherwise, returns a config based on global defaults.
 
     Args:
-        file_name (str): Name of the configuration file. Default is CONFIG_FILE.
-        dir_name (str): Directory where configuration files are stored. Default is CONFIG_DIR_NAME.
+        file_name (str): Name of the config file.
+        dir_name (str): Directory for config files.
 
     Returns:
-        dict: A dictionary containing configuration settings.
+        dict: Configuration settings.
     """
     hide_or_show_cursor(show=True)
     try:
@@ -1431,11 +1434,19 @@ def get_config(file_name=CONFIG_FILE, dir_name=CONFIG_DIR_NAME):
 # ______________________save_config______________________
 def save_config(config, update=False, dir_name=CONFIG_DIR_NAME):
     """
-    Save the current configuration settings to a JSON file.
+    Save the current configuration to a JSON file.
+
+    Creates a shallow copy of config (excluding runtime keys), converts control settings to strings,
+    and writes the result to a file. If update is True, saves to the existing file;
+    otherwise, prompts for a new file name.
 
     Args:
-        config (dict): Configuration settings to be saved.
-        update (bool): If True, update an existing config file; otherwise, save as a new file.
+        config (dict): The configuration to save.
+        update (bool, optional): Update existing file if True; otherwise, create a new file.
+        dir_name (str, optional): Directory to save the config file.
+
+    Returns:
+        None
     """
     hide_or_show_cursor(show=True)
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -1547,9 +1558,10 @@ def save_config(config, update=False, dir_name=CONFIG_DIR_NAME):
 def run_matrix():
     """
     Run the Matrix rain animation.
-    
-    Retrieves configuration, sets up the display, updates columns and rows,
-    handles keyboard input, and renders the animation until interrupted.
+
+    Loads configuration (from file or defaults), initializes the display columns,
+    hooks keyboard events, and enters a loop to update and render the animation.
+    Terminates gracefully on KeyboardInterrupt.
     """
     try:
         config = get_config() # load config from a file or use global variables
@@ -1620,6 +1632,7 @@ def run_matrix():
         flush_stdin()
         hide_or_show_cursor(show=True)
         print('\nMatrix rain stopped')
+
 
 if __name__ == '__main__':
     run_matrix()
