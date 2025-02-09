@@ -1,5 +1,3 @@
-# Thomas Muijsenberg 7.AV 2024/5
-
 import random
 import time
 import os
@@ -19,7 +17,7 @@ CONFIG_FILE = 'base_config'
 CONFIG_DIR_NAME = 'config' # this shouldn't be changed
 
 
-# Global constants (control keys, help messages, etc.) remain unchanged.
+# Global constants (control keys, rows, columns, etc.) remain unchanged.
 NEW_SEQUENCE_CHANCE = 0.018
 RANDOM_CHAR_CHANGE_CHANCE = 0.01
 TIME_BETWEEN_FRAMES = 0.045
