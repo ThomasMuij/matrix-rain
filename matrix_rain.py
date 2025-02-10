@@ -1,13 +1,14 @@
-import random
-import time
-import os
-import keyboard
-import sys
-import json
-import pathvalidate
-import collections
-import threading
-
+import random, time, os, sys, json, collections, threading
+try:
+    import keyboard
+    KEYBOARD_AVAILABLE = True
+except ImportError:
+    KEYBOARD_AVAILABLE = False
+try:
+    import pathvalidate
+    PATHVALIDATE_AVAILABLE = True
+except ImportError:
+    PATHVALIDATE_AVAILABLE = False
 
 # if you saved your config in a file you can load it by putting the file name here
 # if you want to use the global variables, keep this variable as an emtpy string
@@ -33,7 +34,7 @@ AMOUNT_OF_ROWS = 20
 
 SPACE_BETWEEN_COLUMNS = True
 MODE = True  # If True, the first letter of a sequence is random and the rest follow; otherwise the sequence remains unchanged.
-AUTO_SIZE = False
+AUTO_SIZE = True
 VISIBILITY_PRIORITY = 'higher'
 
 CHARACTERS = "ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍｦｲｸｺｿﾁﾄﾉﾌﾤﾨﾛﾝ012345789:.=*+-<>"
@@ -1342,23 +1343,42 @@ def get_config(file_name=CONFIG_FILE, dir_name=CONFIG_DIR_NAME):
         dict: Configuration settings.
     """
     hide_or_show_cursor(show=True)
-    try:
-        pathvalidate.validate_filename(filename=dir_name)
-        folder_is_valid = True
-    except pathvalidate.ValidationError as e:
-        folder_is_valid = False
-        print(f'''\nThe folder "{CONFIG_DIR_NAME}" isn't valid. Reason:''')
-        print(f"{e}\n")
-        print('The global variables will be used instead.')
+    if PATHVALIDATE_AVAILABLE:
+        try:
+            pathvalidate.validate_filename(filename=dir_name)
+            folder_is_valid = True
+        except pathvalidate.ValidationError as e:
+            folder_is_valid = False
+            print(f'''\nThe folder "{CONFIG_DIR_NAME}" isn't valid. Reason:''')
+            print(f"{e}\n")
+            print('The global variables will be used instead.')
+            input('Press enter to continue...') 
+    else:
+        print("pathvalidate not installed; skipping folder validation.")
         input('Press enter to continue...') 
+        folder_is_valid = True
 
     try:
         if file_name and folder_is_valid:
             if not file_name.endswith(".json"):
                 file_name += ".json"
-            try:
-                pathvalidate.validate_filename(filename=file_name)
 
+            if PATHVALIDATE_AVAILABLE:
+                try:
+                    pathvalidate.validate_filename(filename=file_name)
+                    file_is_valid = True
+                except pathvalidate.ValidationError as e:
+                    print("The file you have chosen isn't valid.")
+                    print(f"{e}\n")
+                    print('The global variables will be used instead.')
+                    input('Press enter to continue...')
+                    file_is_valid = True
+            else:
+                print("pathvalidate not installed; skipping file validation.")
+                input('Press enter to continue...')
+                file_is_valid = True
+
+            if file_is_valid:
                 script_dir = os.path.dirname(os.path.abspath(__file__))
                 config_dir = os.path.join(script_dir, dir_name)
                 os.makedirs(config_dir, exist_ok=True) # make the folder if it doesn't exist
@@ -1385,11 +1405,6 @@ def get_config(file_name=CONFIG_FILE, dir_name=CONFIG_DIR_NAME):
                     hide_or_show_cursor(hide=True)
                     return config
                 
-            except pathvalidate.ValidationError as e:
-                print("The file you have chosen isn't valid.")
-                print(f"{e}\n")
-                print('The global variables will be used instead.')
-                input('Press enter to continue...')
     except FileNotFoundError:
         print(f'''The file "{file_name}" wasn't found.''')
         print('The global variables will be used instead.')
@@ -1453,17 +1468,22 @@ def save_config(config, update=False, dir_name=CONFIG_DIR_NAME):
     config_dir = os.path.join(script_dir, dir_name)
     os.makedirs(config_dir, exist_ok=True)
 
-    try:
-        pathvalidate.validate_filename(filename=dir_name)
+    if PATHVALIDATE_AVAILABLE:
+        try:
+            pathvalidate.validate_filename(filename=dir_name)
+            folder_is_valid = True
+        except pathvalidate.ValidationError as e:
+            folder_is_valid = False
+            print(f'''\nThe folder "{dir_name}" isn't valid. Reason:''')
+            print(f"{e}\n")
+            print("You won't be able to save your config")
+            input('Press enter to continue...') 
+            hide_or_show_cursor(hide=True)
+            return
+    else:
+        print("pathvalidate not installed; skipping folder validation.")
+        input('Press enter to continue...')
         folder_is_valid = True
-    except pathvalidate.ValidationError as e:
-        folder_is_valid = False
-        print(f'''\nThe folder "{dir_name}" isn't valid. Reason:''')
-        print(f"{e}\n")
-        print("You won't be able to save your config")
-        input('Press enter to continue...') 
-        hide_or_show_cursor(hide=True)
-        return
 
     # makes sure not change config when modifying it to save:
     s_config = {}
@@ -1529,12 +1549,16 @@ def save_config(config, update=False, dir_name=CONFIG_DIR_NAME):
                 if not new_name.endswith(".json"):
                     new_name += ".json"
 
-                try:
-                    pathvalidate.validate_filename(filename=new_name)
-                except pathvalidate.ValidationError as e:
-                    print("The name you have entered isn't valid. Reason:")
-                    print(f"{e}\n")
-                    continue
+                if PATHVALIDATE_AVAILABLE:
+                    try:
+                        pathvalidate.validate_filename(filename=new_name)
+                    except pathvalidate.ValidationError as e:
+                        print("The name you have entered isn't valid. Reason:")
+                        print(f"{e}\n")
+                        continue
+                else:
+                    print("pathvalidate not installed; skipping file validation.")
+                    input('Press enter to continue...') 
 
                 if new_name in file_names:
                     print(f'\n{new_name} already exists.')
@@ -1578,7 +1602,13 @@ def run_matrix():
 
         currently_pressed = set()
         lock = threading.Lock()
-        keyboard.hook(lambda event: on_key_event(currently_pressed, event, lock))
+        if KEYBOARD_AVAILABLE:
+            keyboard.hook(lambda event: on_key_event(currently_pressed, event, lock))
+        else:
+            print("Keyboard module not installed; keyboard functionality is disabled.")
+            hide_or_show_cursor(show=True)
+            input('Press enter to continue...')
+            hide_or_show_cursor(hide=True)
 
         while True:
             start_time = time.time()
@@ -1628,7 +1658,8 @@ def run_matrix():
             except KeyboardInterrupt:
                 continue
     finally:
-        keyboard.unhook_all()
+        if KEYBOARD_AVAILABLE:
+            keyboard.unhook_all()
         flush_stdin()
         hide_or_show_cursor(show=True)
         print('\nMatrix rain stopped')
