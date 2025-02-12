@@ -1639,15 +1639,14 @@ def run_matrix():
 
             end_time = start_time + config["time_between_frames"]
             while True:
-                if currently_pressed:
-                    if config['controls_activated']:
-                        count, columns, check_clear, check_update_colors = check_keys(currently_pressed, lock, count, columns, config)
-                        if check_clear:
-                            clear = True
-                        if check_update_colors:
-                            update_colors = True
-                    elif keys_are_pressed(currently_pressed, lock, config, config['controls']['enable_controls']):
-                        config['controls_activated'] = True
+                if config['controls_activated'] and currently_pressed:
+                    count, columns, check_clear, check_update_colors = check_keys(currently_pressed, lock, count, columns, config)
+                    if check_clear:
+                        clear = True
+                    if check_update_colors:
+                        update_colors = True
+                elif currently_pressed and keys_are_pressed(currently_pressed, lock, config, config['controls']['enable_controls']):
+                    config['controls_activated'] = True
 
                 remaining = end_time - time.time()
                 time.sleep(min(0.005, max(remaining, 0)))
