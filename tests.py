@@ -6,7 +6,27 @@ import threading
 from pynput import keyboard
 
 
+
 def on_press(key):
+    print('-----------')
+    print(key)
+    print(key.name)
+    print(key.value)
+    print(repr(key))
+    print(key.__dict__)
+    key = listener.canonical(key)
+    print('---')
+    print(key)
+    try:
+        print(key.name)
+        print(key.value)
+    except AttributeError:
+        print(key.char)
+        print(key.vk)
+        print('herrreee' * 10)
+    
+    print(repr(key))
+    print(key.__dict__)
     try:
         print('alphanumeric key {0} pressed'.format(
             key.char))
@@ -32,7 +52,7 @@ listener = keyboard.Listener(
     on_press=on_press,
     on_release=on_release)
 listener.start()
-time.sleep(10)
+time.sleep(50)
 """
 def on_event(event, keys, lock):
     with lock:

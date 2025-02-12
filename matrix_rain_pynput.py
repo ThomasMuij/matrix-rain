@@ -1,9 +1,10 @@
+#!/usr/bin/env python3
 import random, time, os, sys, json, collections, threading
 try:
-    import keyboard
-    KEYBOARD_AVAILABLE = True
+    from pynput import keyboard
+    PYNPUT_AVAILABLE = True
 except ImportError:
-    KEYBOARD_AVAILABLE = False
+    PYNPUT_AVAILABLE = False
 try:
     import pathvalidate
     PATHVALIDATE_AVAILABLE = True
@@ -12,10 +13,10 @@ except ImportError:
 
 # if you saved your config in a file you can load it by putting the file name here
 # if you want to use the global variables, keep this variable as an emtpy string
-CONFIG_FILE = 'base_config'
+CONFIG_FILE = 'base_config_pynput'
 
 
-CONFIG_DIR_NAME = 'config' # this shouldn't be changed
+CONFIG_DIR_NAME = 'config_pynput'
 
 
 # Global constants (control keys, rows, columns, etc.) remain unchanged.
@@ -72,11 +73,11 @@ CONTROLS = {
     "more_rows": "down",
     "less_columns": "left",
     "more_columns": "right",
-    "more_new_sequence_chance": "shift +",
+    "more_new_sequence_chance": "shift =",
     "less_new_sequence_chance": "-",
-    "first_bold": "B shift",
+    "first_bold": "b shift",
     "first_white": "w",
-    "first_bright": "W shift",
+    "first_bright": "w shift",
     "blue": "b",
     "green": "g",
     "red": "r",
@@ -86,14 +87,14 @@ CONTROLS = {
     "chars_01": "0",
     "chars_original": "1",
     "set_any_chars": "2",
-    "change_controls": "shift C",
+    "change_controls": "shift c",
     "show_help_message": "h",
-    "cur_values": "shift H",
-    "save_config": "S shift",
-    "load_config": "L shift",
+    "cur_values": "shift h",
+    "save_config": "s shift",
+    "load_config": "l shift",
     "disable_controls": "shift backspace",
-    "enable_controls": "ctrl shift enter",
-    "check_if_pressed": "shift ctrl"
+    "enable_controls": "ctrl_l shift enter",
+    "check_if_pressed": "shift ctrl_l"
     }
 
 
@@ -127,14 +128,13 @@ def flush_stdin():
 # ______________________parse_ansi_color______________________
 def parse_ansi_color(ansi):
     """
-    Parse an ANSI color escape code and return its RGB components and bold status.
+    Parse an ANSI escape code representing a color.
 
     Args:
-        ansi (str): ANSI escape code string, e.g. "\u001b[38;2;R;G;Bm".
+        ansi (str): ANSI escape code string (e.g., "\u001b[38;2;R;G;Bm").
 
     Returns:
-        tuple: A tuple ((R, G, B), is_bold) where (R, G, B) are integers representing the color
-               and is_bold is a boolean indicating if the ANSI code includes a bold attribute.
+        tuple: A tuple ( (R, G, B), is_bold ) where R, G, B are integers and is_bold is a bool.
     """
     is_bold = False
     if ansi == "\u001b[0m":
@@ -212,20 +212,14 @@ def extend_colors(original_colors, new_length, config):
 # ______________________make_sequence______________________
 def make_sequence(config):
     """
-    Create a new sequence for a column based on the provided configuration parameters.
-
-    The sequence is a dictionary containing:
-      - 'chars': List of characters forming the sequence.
-      - 'final_char': The current (float) vertical position of the sequence's head.
-      - 'speed': The falling speed of the sequence.
-      - 'colors': The color scheme used for the sequence.
-      - 'colors_extended': A placeholder for the extended color gradient.
+    Create a new falling sequence for a column.
 
     Args:
-        config (dict): Configuration dictionary with sequence parameters.
+        config (dict): Configuration settings.
 
     Returns:
-        dict: A dictionary representing the newly created sequence.
+        dict: A dictionary representing a sequence with keys: 'chars', 'final_char',
+              'speed', 'colors', and 'colors_extended'.
     """
     seq_length = random.randint(config["min_sequence_length"], config["max_sequence_length"])
     if random.random() > config['background_chance']:
@@ -242,17 +236,14 @@ def make_sequence(config):
 # ______________________columns_to_rows______________________
 def columns_to_rows(columns, config):
     """
-    Convert a list of columns (each containing sequences) into rows for terminal display.
-
-    For each row, the function determines which character from which sequence should be visible based on its
-    vertical position and brightness.
+    Convert column sequences into a list of strings representing rows for terminal display.
 
     Args:
-        columns (list): List of columns, where each column is a list of sequence dictionaries.
-        config (dict): Configuration dictionary containing display parameters.
+        columns (list): List of columns, each containing sequences.
+        config (dict): Configuration dictionary.
 
     Returns:
-        list: List of strings, each representing a row to be printed on the terminal.
+        list: List of strings for each terminal row.
     """
     rows = []
     for row_index in range(config["amount_of_rows"]):
@@ -318,17 +309,14 @@ def columns_to_rows(columns, config):
 # ______________________update_column______________________
 def update_column(column, config):
     """
-    Update the sequences in a single column based on their speed and configuration parameters.
-
-    Sequences that have moved completely off the visible area are removed.
-    If a sequence has advanced sufficiently, it may also trigger the creation of a new sequence.
+    Update all sequences in a single column.
 
     Args:
-        column (list): A list of sequence dictionaries for the column.
-        config (dict): Configuration dictionary with sequence and display parameters.
+        column (list): List of sequences in the column.
+        config (dict): Configuration dictionary.
 
     Returns:
-        list: Updated list of sequence dictionaries for the column.
+        list: Updated list of sequences for the column.
     """
     new_column = []
     if len(column) == 0: # if the column is empty, create a new sequence with some probability
@@ -358,7 +346,10 @@ def update_column(column, config):
 
     # if the highest sequence is fully visible, create a new sequence with some chance
     if new_column:
-        first_sequence = new_column[0]
+        if config['visibility_priority'] == 'higher':
+            first_sequence = new_column[0]
+        else:
+            first_sequence = new_column[-1]
         if first_sequence['final_char'] >= len(first_sequence["chars"]) and random.random() < config["new_sequence_chance"]:
             if config['visibility_priority'] == 'higher': # changes the order in which valid sequences are checked in columns_to_rows
                 new_column.insert(0, make_sequence(config))
@@ -370,19 +361,15 @@ def update_column(column, config):
 # ______________________update_columns______________________
 def update_columns(columns, config, clear):
     """
-    Update the list of columns by adjusting the number of columns and updating each column's sequences.
-
-    This function ensures that the number of columns matches config["amount_of_columns"] and applies
-    update_column to each visible column.
+    Update the list of columns, adjusting for changes in the number of columns and updating each column.
 
     Args:
-        columns (list): List of current columns (each a list of sequences).
-        config (dict): Configuration dictionary with display parameters.
-        clear (bool): Flag indicating if a screen clear is requested.
+        columns (list): Current columns (list of sequence lists).
+        config (dict): Configuration dictionary.
+        clear (bool): Flag indicating whether a full screen clear is needed.
 
     Returns:
-        tuple: A tuple (new_columns, clear) where new_columns is the updated list of columns and
-               clear is a flag indicating if the screen should be cleared.
+        tuple: (new_columns, clear) where new_columns is the updated columns list.
     """
     # remove or add columns if config["amount_of_columns"] changed
     if len(columns) > config["amount_of_columns"]:
@@ -407,13 +394,10 @@ def update_columns(columns, config, clear):
 # ______________________update_background______________________
 def update_sequence_and_background_colors(config, columns):
     """
-    Update the color settings for sequences and backgrounds based on the current configuration.
-
-    This function recalculates background colors by reducing brightness and updates existing sequences
-    to use the new colors if applicable.
+    Update sequence and background colors based on the current configuration.
 
     Args:
-        config (dict): Configuration dictionary with color parameters.
+        config (dict): Configuration dictionary.
         columns (list): List of columns containing sequences.
 
     Returns:
@@ -453,43 +437,69 @@ def update_sequence_and_background_colors(config, columns):
                 sequence['colors'] = config['colors'] # update the sequences colors if it isn't a background color
 
 
-# ______________________on_key_event______________________
-def on_key_event(currently_pressed, event, lock):
+# ______________________key_to_str______________________
+def key_to_str(key):
     """
-    Callback function to handle keyboard events and update the set of currently pressed keys.
+    Convert a key event to its lowercase string representation.
 
     Args:
-        currently_pressed (set): A set containing the names of keys currently pressed.
-        event: Keyboard event object.
-        lock (threading.Lock): Lock object to ensure thread-safe updates.
+        key: A key event (from pynput or similar).
 
     Returns:
-        None
+        str: Lowercase string representation of the key.
     """
-    try:
-        with lock:
-            if event.event_type == 'down':
-                currently_pressed.add(event.name)
-            if event.event_type == 'up':
-                currently_pressed.discard(event.name.lower())
-                currently_pressed.discard(event.name.upper())
-    except KeyboardInterrupt:
-        pass
+    # For KeyCode (i.e. regular letter/number keys), return the character in lowercase.
+    if hasattr(key, 'char') and key.char is not None:
+        return key.char.lower()
+    else:
+        # For special keys (e.g. Key.shift, Key.ctrl), convert "Key.shift" -> "shift"
+        s = str(key)  # e.g. "Key.space", "Key.shift"
+        if s.startswith("Key."):
+            return s[4:].lower()
+        return s.lower()
+    
+
+# ______________________on_press______________________
+def on_press(key, currently_pressed, lock):
+    """
+    Callback for key press events.
+
+    Args:
+        key: The key event.
+        currently_pressed (set): Set of currently pressed keys.
+        lock (threading.Lock): Lock for thread-safe access.
+    """
+    with lock:
+        currently_pressed.add(key_to_str(key))
+
+
+# ______________________on_release______________________
+def on_release(key, currently_pressed, lock):
+    """
+    Callback for key release events.
+
+    Args:
+        key: The key event.
+        currently_pressed (set): Set of currently pressed keys.
+        lock (threading.Lock): Lock for thread-safe access.
+    """
+    with lock:
+        currently_pressed.discard(key_to_str(key))
 
 
 # ______________________check_key______________________
 def keys_are_pressed(currently_pressed, lock, config, keys):
     """
-    Check if the specified keys are currently pressed, ensuring that unwanted keys are not pressed.
+    Check if the specified keys are currently pressed, while avoiding interference from other keys.
 
     Args:
         currently_pressed (set): Set of keys currently pressed.
-        lock (threading.Lock): Lock object for thread-safe access.
-        config (dict): Configuration dictionary, which includes keys that should not be pressed if they aren't in keys.
-        keys (list): List of keys that are required to be pressed.
+        lock (threading.Lock): Lock for thread-safe access.
+        config (dict): Configuration dictionary (contains control keys).
+        keys (list or str): Required key or list of keys.
 
     Returns:
-        bool: True if all required keys are pressed and none of the unwanted keys are pressed; False otherwise.
+        bool: True if all required keys are pressed and no interfering key (per 'check_if_pressed') is active.
     """
     with lock:
         # prevents accidentally using multiple controls that share keys
@@ -506,24 +516,24 @@ def keys_are_pressed(currently_pressed, lock, config, keys):
 # ______________________check_keyboard______________________
 def check_keys(currently_pressed, lock, count, columns, config):
     """
-    Check keyboard input and update configuration and column data based on key presses.
+    Process keyboard input to update configuration and columns based on key presses.
 
-    This function processes various keyboard inputs to adjust parameters such as speed, sequence chance,
-    color settings, and more.
+    This function handles actions such as speeding up, pausing, changing colors,
+    saving/loading configuration, and even changing controls.
 
     Args:
         currently_pressed (set): Set of keys currently pressed.
-        lock (threading.Lock): Lock for thread-safe operations on currently_pressed.
-        count (list): List of timestamps for debouncing key inputs.
-        columns (list): List of current columns containing sequences.
-        config (dict): Configuration dictionary with various parameters.
+        lock (threading.Lock): Lock for thread-safe access.
+        count (list): List of timestamps used for debouncing.
+        columns (list): List of columns (each a list of sequences).
+        config (dict): Configuration dictionary.
 
     Returns:
-        tuple: (count, columns, clear, update_colors)
-               - count: Updated list of timestamps.
-               - columns: Updated columns after key processing.
-               - clear (bool): Flag indicating if the screen should be cleared.
-               - update_colors (bool): Flag indicating if a color update is needed.
+        tuple: (count, columns, clear, update_colors) where:
+            - count: Updated debounce timestamps.
+            - columns: Updated columns.
+            - clear (bool): Whether the screen should be cleared.
+            - update_colors (bool): Whether a color update is needed.
     """
     cur_time = time.time()
     time_passed = [cur_time - t for t in count]
@@ -1126,57 +1136,110 @@ def check_keys(currently_pressed, lock, count, columns, config):
                 continue
             elif control in ['new', 'n']:
                 for key in new_controls:
-                    print(f'{key}: {' '.join(new_controls[key])}')
+                    print(f"{key}: {' '.join(new_controls[key])}")
                 continue
             elif control in ['save', 's']:
                 save = True
                 break
             elif control in ['exit', 'e']:
                 break
+
             elif control in config['controls'].keys():
-                print("\nEnter the keys you would like to use for this control.")
-                print("If you want this control to be activated by multiple keys, separate them by a space: a b ctrl")
-                print('Using shift is allowed but keep in mind that when you enter "shift a" the control will activate only if you press "a" and then "shift".')
-                print('However, if you enter "shift A" the control will be activated if you press "shift" first and then you press "a"')
-                print('Also make sure to add any keys needed to press your desired key (for example if you need to press "shift" to be able to press "+" make it: "shift +")')
-                print(f"To keep the control the same, just enter the old keys ({' '.join(new_controls[control])})")
-                new_keys = input('> ').strip()
-                if new_keys:
-                    new_keys = new_keys.split(' ')
-                    for new_key in new_keys.copy():
-                        try:
-                            keyboard.is_pressed(new_key) # check if key is valid in the keyboard library
-                            while new_keys.count(new_key) > 1: # remove duplicates
-                                new_keys.remove(new_key)
-                        except Exception as e:
-                            print(f'"{new_key}" can not be used because: {e}')
-                            go_back = True
-                            break
-                    if go_back:
-                        continue
-                    new_controls[control] = new_keys
+                print("\nlisten/l = let the program register any keys pressed until a cutoff key is pressed")
+                print("exit/e = choose a different control")
+                command = input('> ').strip().lower()
+                if command in ['exit', 'e']:
+                    continue
 
-                    print("""\nControls like "ctrl a" and "a" could both be accidentally used when you press "ctrl" and "a" """)
-                    print("If you don't want this to happen, enter at least one other key of the control that has extra keys.")
-                    print("Keep this empty if you don't want to add any.")
-                    shared_keys = input('> ').strip()
-                    if shared_keys:
-                        shared_keys = shared_keys.split(' ')
-                        for shared_key in shared_keys.copy():
-                            try:
-                                keyboard.is_pressed(shared_key)
-                            except Exception as e:
-                                print(f'"{shared_key}" can not be used because: {e}')
-                                go_back = True
+                elif command in ['listen', 'l']:
+                    def listen_for_stop(key, stop_key):
+                        stop_key.append(key_to_str(key))
+                        return False
+                    
+                    while True:
+                        stop_key = []
+                        print("\nPress the key that will stop the listening.")
+                        time.sleep(0.3)
+                        with keyboard.Listener(on_press=lambda key: listen_for_stop(listen_stop.canonical(key) if isinstance(key, keyboard.KeyCode) else key, stop_key)) as listen_stop:
+                            listen_stop.join()
+
+                        stop_key = stop_key[0]
+                        flush_stdin()
+                        print(f'\n"{stop_key}" will be used to stop listening for keys.')
+                        print("again/a = choose a different key to stop")
+                        print("continue/c = start listening for keys for the controls")
+
+                        while True:
+                            command = input('> ').strip().lower()
+                            if command in ['again', 'a']:
+                                listen_again = True
                                 break
-                        if go_back:
-                            continue
-                        new_controls['check_if_pressed'] += shared_keys
+                            elif command in ['continue', 'c']:
+                                listen_again = False
+                                break
+                            else:
+                                print("Unknown command\n")
+                        if not listen_again:
+                            break
 
-                        for key in new_controls['check_if_pressed'].copy():
-                            while new_controls['check_if_pressed'].count(key) > 1:
-                                new_controls['check_if_pressed'].remove(key)
+                    while True:
+                        captured_keys = set()
+                        def on_press_with_stop(key):
+                            key = key_to_str(key)
+                            if key == stop_key:
+                                return False 
+                            captured_keys.add(key)
+                            print(f"keys pressed so far: {', '.join(captured_keys)}")
 
+                        time.sleep(0.2)
+                        print("\nListening for keys")
+                        with keyboard.Listener(on_press=lambda key: on_press_with_stop(l.canonical(key) if isinstance(key, keyboard.KeyCode) else key)) as l:
+                            l.join()
+
+                        flush_stdin()
+                        replace = True
+                        if control == "check_if_pressed":
+                            print('\nYou have chosen the control "check_if_pressed".')
+                            print('Therefore you can replace it or just append to it.')
+                            print('Enter "append/a" or "replace/r"')
+                            while True:
+                                request = input('> ').strip().lower()
+                                if request in ['append', 'a']:
+                                    replace = False
+                                    break
+                                elif request in ['replace', 'r']:
+                                    replace = True
+                                    break
+                                else:
+                                    print('\nUnknown command')
+
+                        print(f"\nDo you want to use these keys for the control? ({', '.join(captured_keys)})")
+
+                        while True:
+                            command = input('> ').strip().lower()
+                            if command in ['yes', 'y']:
+                                use_keys = True
+                                break
+                            elif command in ['no', 'n']:
+                                use_keys = False
+                                break
+                            else:
+                                print("\nPlease enter yes/y or no/n")
+                        if use_keys:
+                            if captured_keys:
+                                if replace:
+                                    new_controls[control] = list(captured_keys)
+                                else:
+                                    new_controls[control].extend(list(captured_keys))
+                                print("""\nControls like "ctrl a" and "a" could both be accidentally used when you press "ctrl" and "a" """)
+                                print('''If you don't want this to happen, make sure to change "check_if_pressed"''')
+                                print("so that at least one extra key of the control that has extra keys is there.")
+                                break
+                            else:
+                                print("No keys have been registered.")
+                                continue
+                else:
+                    print("\nUnknown command. Try again.")
             else:
                 print("Name wasn't found.")
         if save:
@@ -1289,9 +1352,10 @@ def clear_if_necessary(clear, config, terminal_size=None, old_terminal_size=None
     Clear the terminal screen if necessary.
 
     Args:
-        clear (bool): Flag indicating whether a clear is already requested.
-        old_terminal_size (int): Previous terminal line count.
-        config (dict): Configuration dictionary with display parameters.
+        clear (bool): Flag indicating whether clearing is requested.
+        config (dict): Configuration dictionary.
+        terminal_size (os.terminal_size, optional): Current terminal size.
+        old_terminal_size (os.terminal_size, optional): Previous terminal size.
     """
     if not (terminal_size and old_terminal_size):
         return
@@ -1311,15 +1375,12 @@ def clear_if_necessary(clear, config, terminal_size=None, old_terminal_size=None
 # ______________________adjust_size______________________
 def adjust_size(columns, config, terminal_size=None):
     """
-    Adjust AMOUNT_OF_ROWS and AMOUNT_OF_COLUMNS based on the current terminal size.
+    Adjust configuration parameters based on the terminal size.
 
     Args:
         columns (list): Current columns (unused).
-        config (dict): Configuration settings.
+        config (dict): Configuration dictionary.
         terminal_size (os.terminal_size, optional): Current terminal size.
-
-    Returns:
-        None
     """
     if terminal_size:
         # - 1 ensures that constant clearing doesn't happen and that typing into the terminal doesn't cause issues by moving it
@@ -1330,17 +1391,14 @@ def adjust_size(columns, config, terminal_size=None):
 # ______________________get_config______________________
 def get_config(file_name=CONFIG_FILE, dir_name=CONFIG_DIR_NAME):
     """
-    Load configuration from a JSON file or return default settings.
-
-    Validates the folder and file names. If the file is valid and found, loads it;
-    otherwise, returns a config based on global defaults.
+    Load configuration from a JSON file, or return the default configuration if not found.
 
     Args:
-        file_name (str): Name of the config file.
-        dir_name (str): Directory for config files.
+        file_name (str): Name of the configuration file.
+        dir_name (str): Directory where configuration files are stored.
 
     Returns:
-        dict: Configuration settings.
+        dict: Configuration dictionary.
     """
     hide_or_show_cursor(show=True)
     if PATHVALIDATE_AVAILABLE:
@@ -1451,17 +1509,10 @@ def save_config(config, update=False, dir_name=CONFIG_DIR_NAME):
     """
     Save the current configuration to a JSON file.
 
-    Creates a shallow copy of config (excluding runtime keys), converts control settings to strings,
-    and writes the result to a file. If update is True, saves to the existing file;
-    otherwise, prompts for a new file name.
-
     Args:
-        config (dict): The configuration to save.
-        update (bool, optional): Update existing file if True; otherwise, create a new file.
-        dir_name (str, optional): Directory to save the config file.
-
-    Returns:
-        None
+        config (dict): Configuration dictionary.
+        update (bool): If True, update the existing file; otherwise, create a new file.
+        dir_name (str): Directory to save the configuration file.
     """
     hide_or_show_cursor(show=True)
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -1581,11 +1632,11 @@ def save_config(config, update=False, dir_name=CONFIG_DIR_NAME):
 # ______________________run_matrix______________________
 def run_matrix():
     """
-    Run the Matrix rain animation.
+    Run the Matrix rain animation in the terminal.
 
     Loads configuration (from file or defaults), initializes the display columns,
-    hooks keyboard events, and enters a loop to update and render the animation.
-    Terminates gracefully on KeyboardInterrupt.
+    sets up keyboard listeners (if available), and enters a loop to update and render
+    the animation until interrupted.
     """
     try:
         config = get_config() # load config from a file or use global variables
@@ -1602,10 +1653,14 @@ def run_matrix():
 
         currently_pressed = set()
         lock = threading.Lock()
-        if KEYBOARD_AVAILABLE:
-            keyboard.hook(lambda event: on_key_event(currently_pressed, event, lock))
+        if PYNPUT_AVAILABLE:
+            listnener = keyboard.Listener(
+                on_press=lambda key: on_press(listnener.canonical(key) if isinstance(key, keyboard.KeyCode) else key, currently_pressed, lock),
+                on_release=lambda key: on_release(listnener.canonical(key) if isinstance(key, keyboard.KeyCode) else key, currently_pressed, lock)
+            )
+            listnener.start()
         else:
-            print("Keyboard module not installed; keyboard functionality is disabled.")
+            print("Pynput not installed; keyboard functionality is disabled.")
             hide_or_show_cursor(show=True)
             input('Press enter to continue...')
             hide_or_show_cursor(hide=True)
@@ -1634,18 +1689,22 @@ def run_matrix():
             sys.stdout.write("\u001b[H" + rows + "\n") # \u001b[H moves the cursor to row and column 0
             sys.stdout.flush()
 
+            
+            end_time = start_time + config["time_between_frames"]
             while True:
-                if config['controls_activated']:
-                    count, columns, check_clear, check_update_colors = check_keys(currently_pressed, lock, count, columns, config)
-                    if check_clear:
-                        clear = True
-                    if check_update_colors:
-                        update_colors = True
-                elif keys_are_pressed(currently_pressed, lock, config, config['controls']['enable_controls']):
-                    config['controls_activated'] = True
+                if currently_pressed:
+                    if config['controls_activated']:
+                        count, columns, check_clear, check_update_colors = check_keys(currently_pressed, lock, count, columns, config)
+                        if check_clear:
+                            clear = True
+                        if check_update_colors:
+                            update_colors = True
+                    elif keys_are_pressed(currently_pressed, lock, config, config['controls']['enable_controls']):
+                        config['controls_activated'] = True
 
-                time.sleep(0.001)
-                if time.time() - start_time > config["time_between_frames"]:
+                remaining = end_time - time.time()
+                time.sleep(min(0.005, max(remaining, 0)))
+                if time.time() > end_time:
                     break
 
     except KeyboardInterrupt:
@@ -1658,8 +1717,8 @@ def run_matrix():
             except KeyboardInterrupt:
                 continue
     finally:
-        if KEYBOARD_AVAILABLE:
-            keyboard.unhook_all()
+        if PYNPUT_AVAILABLE:
+            listnener.stop()
         flush_stdin()
         hide_or_show_cursor(show=True)
         print('\nMatrix rain stopped')
