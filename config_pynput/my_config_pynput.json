@@ -34,8 +34,8 @@
         "save_config": "s shift",
         "load_config": "l shift",
         "disable_controls": "shift backspace",
-        "enable_controls": "ctrl_l shift enter",
-        "check_if_pressed": "shift ctrl_l"
+        "enable_controls": "ctrl shift enter",
+        "check_if_pressed": "shift ctrl"
     },
     "new_sequence_chance": 0.007678957382781666,
     "random_char_change_chance": 0.01,

@@ -9,6 +9,7 @@ from pynput import keyboard
 
 def on_press(key):
     print('-----------')
+    print(type(key))
     print(key)
     print(key.name)
     print(key.value)
@@ -16,6 +17,7 @@ def on_press(key):
     print(key.__dict__)
     key = listener.canonical(key)
     print('---')
+    print(type(key))
     print(key)
     try:
         print(key.name)

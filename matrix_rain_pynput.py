@@ -13,7 +13,7 @@ except ImportError:
 
 # if you saved your config in a file you can load it by putting the file name here
 # if you want to use the global variables, keep this variable as an emtpy string
-CONFIG_FILE = 'base_config_pynput'
+CONFIG_FILE = ''
 
 
 CONFIG_DIR_NAME = 'config_pynput'
@@ -59,42 +59,42 @@ COLORS = (
 
 # Control key assignments:
 CONTROLS = {
-    "speed_up": "f",
-    "slow_down": "s",
-    "change_speed_diff": "d",
-    "pause": "p",
-    "mode_char": "q",
-    "auto_size_char": "a",
-    "make_space_between_columns": "shift space",
-    "change_visibility_priority": "v",
-    "more_random_char": "shift up",
-    "less_random_char": "shift down",
-    "less_rows": "up",
-    "more_rows": "down",
-    "less_columns": "left",
-    "more_columns": "right",
-    "more_new_sequence_chance": "shift =",
-    "less_new_sequence_chance": "-",
-    "first_bold": "b shift",
-    "first_white": "w",
-    "first_bright": "w shift",
-    "blue": "b",
-    "green": "g",
-    "red": "r",
-    "change_background_brightness": "8",
-    "create_color": "9",
-    "change_seq_length": "l",
-    "chars_01": "0",
-    "chars_original": "1",
-    "set_any_chars": "2",
-    "change_controls": "shift c",
-    "show_help_message": "h",
-    "cur_values": "shift h",
-    "save_config": "s shift",
-    "load_config": "l shift",
-    "disable_controls": "shift backspace",
-    "enable_controls": "ctrl_l shift enter",
-    "check_if_pressed": "shift ctrl_l"
+        "speed_up": "f",
+        "slow_down": "s",
+        "change_speed_diff": "d",
+        "pause": "p",
+        "mode_char": "q",
+        "auto_size_char": "a",
+        "make_space_between_columns": "shift space",
+        "change_visibility_priority": "v",
+        "more_random_char": "shift up",
+        "less_random_char": "shift down",
+        "less_rows": "up",
+        "more_rows": "down",
+        "less_columns": "left",
+        "more_columns": "right",
+        "more_new_sequence_chance": "shift =",
+        "less_new_sequence_chance": "-",
+        "first_bold": "b shift",
+        "first_white": "w",
+        "first_bright": "w shift",
+        "blue": "b",
+        "green": "g",
+        "red": "r",
+        "change_background_brightness": "8",
+        "create_color": "9",
+        "change_seq_length": "l",
+        "chars_01": "0",
+        "chars_original": "1",
+        "set_any_chars": "2",
+        "change_controls": "shift c",
+        "show_help_message": "h",
+        "cur_values": "shift h",
+        "save_config": "s shift",
+        "load_config": "l shift",
+        "disable_controls": "shift backspace",
+        "enable_controls": "ctrl shift enter",
+        "check_if_pressed": "shift ctrl"
     }
 
 
@@ -435,6 +435,16 @@ def update_sequence_and_background_colors(config, columns):
                     sequence['colors'] = tuple(config['background_colors'].keys())[index] # if possible keep the background color's brightness the same
             else:
                 sequence['colors'] = config['colors'] # update the sequences colors if it isn't a background color
+
+
+# ______________________make_canonical______________________
+def make_canonical(key, listener):
+    canonical_key = listener.canonical(key)
+
+    if type(key) == type(canonical_key):
+        return canonical_key
+    else:
+        return key
 
 
 # ______________________key_to_str______________________
@@ -1193,7 +1203,7 @@ def check_keys(currently_pressed, lock, count, columns, config):
 
                         time.sleep(0.2)
                         print("\nListening for keys")
-                        with keyboard.Listener(on_press=lambda key: on_press_with_stop(l.canonical(key) if isinstance(key, keyboard.KeyCode) else key)) as l:
+                        with keyboard.Listener(on_press=lambda key: on_press_with_stop(make_canonical(key, l))) as l:
                             l.join()
 
                         flush_stdin()
@@ -1655,8 +1665,8 @@ def run_matrix():
         lock = threading.Lock()
         if PYNPUT_AVAILABLE:
             listnener = keyboard.Listener(
-                on_press=lambda key: on_press(listnener.canonical(key) if isinstance(key, keyboard.KeyCode) else key, currently_pressed, lock),
-                on_release=lambda key: on_release(listnener.canonical(key) if isinstance(key, keyboard.KeyCode) else key, currently_pressed, lock)
+                on_press=lambda key: on_press(make_canonical(key, listnener), currently_pressed, lock),
+                on_release=lambda key: on_release(make_canonical(key, listnener), currently_pressed, lock)
             )
             listnener.start()
         else:
