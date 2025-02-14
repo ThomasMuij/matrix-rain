@@ -134,7 +134,7 @@ def flush_stdin():
 
 
 # ______________________parse_ansi_color______________________
-def parse_ansi_color(ansi):
+def parse_ansi_color(ansi: str):
     """
     Parse an ANSI color escape code and return its RGB components and bold status.
 
@@ -162,7 +162,7 @@ def parse_ansi_color(ansi):
 
 
 # ______________________extend_colors______________________
-def extend_colors(original_colors, new_length, config):
+def extend_colors(original_colors: tuple, new_length: int, config: dict):
     """
     Generate an extended color gradient of a specified length by linearly interpolating between the given colors.
     Utilizes caching stored in config["extended_color_cache"] to avoid redundant computations.
@@ -221,7 +221,7 @@ def extend_colors(original_colors, new_length, config):
 
 
 # ______________________make_sequence______________________
-def make_sequence(config):
+def make_sequence(config: dict):
     """
     Create a new sequence for a column based on the provided configuration parameters.
 
@@ -251,7 +251,7 @@ def make_sequence(config):
 
 
 # ______________________columns_to_rows______________________
-def columns_to_rows(columns, config):
+def columns_to_rows(columns: list, config: dict):
     """
     Convert a list of columns (each containing sequences) into rows for terminal display.
 
@@ -329,7 +329,7 @@ def columns_to_rows(columns, config):
 
 
 # ______________________update_column______________________
-def update_column(column, config):
+def update_column(column: list, config: dict):
     """
     Update the sequences in a single column based on their speed and configuration parameters.
 
@@ -386,7 +386,7 @@ def update_column(column, config):
 
 
 # ______________________update_columns______________________
-def update_columns(columns, config, clear):
+def update_columns(columns: list, config: dict, clear: bool):
     """
     Update the list of columns by adjusting the number of columns and updating each column's sequences.
 
@@ -423,7 +423,7 @@ def update_columns(columns, config, clear):
 
 
 # ______________________update_background______________________
-def update_sequence_and_background_colors(config, columns):
+def update_sequence_and_background_colors(config: dict, columns: list):
     """
     Update the color settings for sequences and backgrounds based on the current configuration.
 
@@ -473,7 +473,7 @@ def update_sequence_and_background_colors(config, columns):
 
 
 # ______________________on_key_event______________________
-def on_key_event(currently_pressed, event, lock):
+def on_key_event(currently_pressed: set, event, lock):
     """
     Callback function to handle keyboard events and update the set of currently pressed keys.
 
@@ -497,7 +497,7 @@ def on_key_event(currently_pressed, event, lock):
 
 
 # ______________________check_key______________________
-def keys_are_pressed(currently_pressed, lock, config, keys):
+def keys_are_pressed(currently_pressed: set, lock, config, keys: list):
     """
     Check if the specified keys are currently pressed, ensuring that unwanted keys are not pressed.
 
@@ -523,7 +523,7 @@ def keys_are_pressed(currently_pressed, lock, config, keys):
 
 
 # ______________________check_keyboard______________________
-def check_keys(currently_pressed, lock, count, columns, config):
+def check_keys(currently_pressed: set, lock, count: list, columns: list, config: dict):
     """
     Check keyboard input and update configuration and column data based on key presses.
 
@@ -1303,14 +1303,15 @@ background_colors = {config["background_colors"]}
 
 
 # ______________________clear_if_necessary______________________
-def clear_if_necessary(clear, config, terminal_size=None, old_terminal_size=None):
+def clear_if_necessary(clear: bool, config: dict, terminal_size=None, old_terminal_size=None):
     """
     Clear the terminal screen if necessary.
 
     Args:
-        clear (bool): Flag indicating whether a clear is already requested.
-        old_terminal_size (int): Previous terminal line count.
-        config (dict): Configuration dictionary with display parameters.
+        clear (bool): Flag indicating whether clearing is requested.
+        config (dict): Configuration dictionary.
+        terminal_size (os.terminal_size, optional): Current terminal size.
+        old_terminal_size (os.terminal_size, optional): Previous terminal size.
     """
     if not (terminal_size and old_terminal_size):
         return
@@ -1328,12 +1329,11 @@ def clear_if_necessary(clear, config, terminal_size=None, old_terminal_size=None
 
 
 # ______________________adjust_size______________________
-def adjust_size(columns, config, terminal_size=None):
+def adjust_size(config: dict, terminal_size=None):
     """
     Adjust AMOUNT_OF_ROWS and AMOUNT_OF_COLUMNS based on the current terminal size.
 
     Args:
-        columns (list): Current columns (unused).
         config (dict): Configuration settings.
         terminal_size (os.terminal_size, optional): Current terminal size.
 
@@ -1466,7 +1466,7 @@ def get_config(file_name=CONFIG_FILE, dir_name=CONFIG_DIR_NAME):
 
 
 # ______________________save_config______________________
-def save_config(config, update=False, dir_name=CONFIG_DIR_NAME):
+def save_config(config: dict, update=False, dir_name=CONFIG_DIR_NAME):
     """
     Save the current configuration to a JSON file.
 
@@ -1638,7 +1638,7 @@ def run_matrix():
                 update_sequence_and_background_colors(config, columns)
 
             if config["auto_size"] and terminal_size:
-                adjust_size(columns, config, terminal_size)
+                adjust_size(config, terminal_size)
 
             columns, clear = update_columns(columns, config, clear)
 

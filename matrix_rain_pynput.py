@@ -133,7 +133,7 @@ def flush_stdin():
 
 
 # ______________________parse_ansi_color______________________
-def parse_ansi_color(ansi):
+def parse_ansi_color(ansi: str):
     """
     Parse an ANSI escape code representing a color.
 
@@ -160,7 +160,7 @@ def parse_ansi_color(ansi):
 
 
 # ______________________extend_colors______________________
-def extend_colors(original_colors, new_length, config):
+def extend_colors(original_colors: tuple, new_length: int, config: dict):
     """
     Generate an extended color gradient of a specified length by linearly interpolating between the given colors.
     Utilizes caching stored in config["extended_color_cache"] to avoid redundant computations.
@@ -219,7 +219,7 @@ def extend_colors(original_colors, new_length, config):
 
 
 # ______________________make_sequence______________________
-def make_sequence(config):
+def make_sequence(config: dict):
     """
     Create a new falling sequence for a column.
 
@@ -243,7 +243,7 @@ def make_sequence(config):
 
 
 # ______________________columns_to_rows______________________
-def columns_to_rows(columns, config):
+def columns_to_rows(columns: list, config: dict):
     """
     Convert column sequences into a list of strings representing rows for terminal display.
 
@@ -318,7 +318,7 @@ def columns_to_rows(columns, config):
 
 
 # ______________________update_column______________________
-def update_column(column, config):
+def update_column(column: list, config: dict):
     """
     Update all sequences in a single column.
 
@@ -371,7 +371,7 @@ def update_column(column, config):
 
 
 # ______________________update_columns______________________
-def update_columns(columns, config, clear):
+def update_columns(columns: list, config: dict, clear: bool):
     """
     Update the list of columns, adjusting for changes in the number of columns and updating each column.
 
@@ -404,7 +404,7 @@ def update_columns(columns, config, clear):
 
 
 # ______________________update_background______________________
-def update_sequence_and_background_colors(config, columns):
+def update_sequence_and_background_colors(config: dict, columns: list):
     """
     Update sequence and background colors based on the current configuration.
 
@@ -495,7 +495,7 @@ def key_to_str(key):
 
 
 # ______________________on_press______________________
-def on_press(key, currently_pressed, lock):
+def on_press(key, currently_pressed: set, lock):
     """
     Callback for key press events.
 
@@ -509,7 +509,7 @@ def on_press(key, currently_pressed, lock):
 
 
 # ______________________on_release______________________
-def on_release(key, currently_pressed, lock):
+def on_release(key, currently_pressed: set, lock):
     """
     Callback for key release events.
 
@@ -523,7 +523,7 @@ def on_release(key, currently_pressed, lock):
 
 
 # ______________________check_key______________________
-def keys_are_pressed(currently_pressed, lock, config, keys):
+def keys_are_pressed(currently_pressed: set, lock, config: dict, keys):
     """
     Check if the specified keys are currently pressed, while avoiding interference from other keys.
 
@@ -549,7 +549,7 @@ def keys_are_pressed(currently_pressed, lock, config, keys):
 
 
 # ______________________check_keyboard______________________
-def check_keys(currently_pressed, lock, count, columns, config):
+def check_keys(currently_pressed: set, lock, count: list, columns: list, config: dict):
     """
     Process keyboard input to update configuration and columns based on key presses.
 
@@ -1383,7 +1383,7 @@ background_colors = {config["background_colors"]}
 
 
 # ______________________clear_if_necessary______________________
-def clear_if_necessary(clear, config, terminal_size=None, old_terminal_size=None):
+def clear_if_necessary(clear: bool, config: dict, terminal_size=None, old_terminal_size=None):
     """
     Clear the terminal screen if necessary.
 
@@ -1409,12 +1409,11 @@ def clear_if_necessary(clear, config, terminal_size=None, old_terminal_size=None
 
 
 # ______________________adjust_size______________________
-def adjust_size(columns, config, terminal_size=None):
+def adjust_size(config: dict, terminal_size=None):
     """
     Adjust configuration parameters based on the terminal size.
 
     Args:
-        columns (list): Current columns (unused).
         config (dict): Configuration dictionary.
         terminal_size (os.terminal_size, optional): Current terminal size.
     """
@@ -1541,7 +1540,7 @@ def get_config(file_name=CONFIG_FILE, dir_name=CONFIG_DIR_NAME):
 
 
 # ______________________save_config______________________
-def save_config(config, update=False, dir_name=CONFIG_DIR_NAME):
+def save_config(config: dict, update=False, dir_name=CONFIG_DIR_NAME):
     """
     Save the current configuration to a JSON file.
 
@@ -1688,11 +1687,11 @@ def run_matrix():
         currently_pressed = set()
         lock = threading.Lock()
         if PYNPUT_AVAILABLE:
-            listnener = keyboard.Listener(
-                on_press=lambda key: on_press(make_canonical(key, listnener), currently_pressed, lock),
-                on_release=lambda key: on_release(make_canonical(key, listnener), currently_pressed, lock)
+            listener = keyboard.Listener(
+                on_press=lambda key: on_press(make_canonical(key, listener), currently_pressed, lock),
+                on_release=lambda key: on_release(make_canonical(key, listener), currently_pressed, lock)
             )
-            listnener.start()
+            listener.start()
         else:
             print("Pynput not installed; keyboard functionality is disabled.")
             hide_or_show_cursor(show=True)
@@ -1710,7 +1709,7 @@ def run_matrix():
                 update_sequence_and_background_colors(config, columns)
 
             if config["auto_size"] and terminal_size:
-                adjust_size(columns, config, terminal_size)
+                adjust_size(config, terminal_size)
 
             columns, clear = update_columns(columns, config, clear)
 
@@ -1750,7 +1749,7 @@ def run_matrix():
                 continue
     finally:
         if PYNPUT_AVAILABLE:
-            listnener.stop()
+            listener.stop()
         flush_stdin()
         hide_or_show_cursor(show=True)
         print('\nMatrix rain stopped')
