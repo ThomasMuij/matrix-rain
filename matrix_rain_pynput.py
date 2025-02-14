@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-import random, time, os, sys, json, collections, threading
+import random
+import time
+import os
+import sys
+import json
+import collections
+import threading
 try:
     from pynput import keyboard
     PYNPUT_AVAILABLE = True
@@ -27,7 +33,8 @@ TIME_BETWEEN_FRAMES = 0.045
 MIN_SEQUENCE_LENGTH = 3
 MAX_SEQUENCE_LENGTH = 20
 
-MIN_SEQUENCE_SPEED = 0.2  # 1/sequence_speed = frames to move the sequence; sequence_speed has a range from MIN_SEQUENCE_SPEED to MAX_SEQUENCE_SPEED
+# 1/sequence_speed = frames to move the sequence; sequence_speed has a range from MIN_SEQUENCE_SPEED to MAX_SEQUENCE_SPEED
+MIN_SEQUENCE_SPEED = 0.2
 MAX_SEQUENCE_SPEED = 0.8
 
 AMOUNT_OF_COLUMNS = 140
@@ -174,7 +181,7 @@ def extend_colors(original_colors, new_length, config):
         # Mark as recently used
         cache.move_to_end(key)
         return cache[key]
-    
+
     if new_length <= 1:
         cache[key] = original_colors
         cache.move_to_end(key)
@@ -185,14 +192,16 @@ def extend_colors(original_colors, new_length, config):
     extended = []
     n = len(original_colors)
     for i in range(new_length):
-        t = i / (new_length - 1) # relative position in the new color list
-        pos = t * (n - 1) # find index(float) in original colors that's at the same relative position as in the new one
+        t = i / (new_length - 1)  # relative position in the new color list
+        pos = t * (n - 1)  # find index(float) in original colors that's at the same relative position as in the new one
         idx = int(pos)
-        # Fractional distance between idx and the next color, used for interpolation (ranges from 0 to 1). 
+        # Fractional distance between idx and the next color, used for interpolation (ranges from 0 to 1).
         # If idx is the last color, set t2 to 1.0 to avoid out-of-bounds errors.
         t2 = pos - idx if idx < n - 1 else 1.0
-        rgb1, is_bold1 = parse_ansi_color(original_colors[idx]) # find the r, g, b components of the first color with a smaller index
-        rgb2, is_bold2 = parse_ansi_color(original_colors[min(idx + 1, n - 1)]) # find the next color, if we are the end of the list take the last one itself
+        # find the r, g, b components of the first color with a smaller index
+        rgb1, is_bold1 = parse_ansi_color(original_colors[idx])
+        # find the next color, if we are the end of the list take the last one itself
+        rgb2, is_bold2 = parse_ansi_color(original_colors[min(idx + 1, n - 1)])
         # find the weighted average between the 2 colors based on the distance from the first one:
         r = int(round(rgb1[0] * (1 - t2) + rgb2[0] * t2))
         g = int(round(rgb1[1] * (1 - t2) + rgb2[1] * t2))
@@ -256,26 +265,27 @@ def columns_to_rows(columns, config):
             if config['space_between_columns'] and i % 2 == 1:
                 row.append(' ')
                 continue
-            
+
             # Find the sequence in the column covering this row based with the highest visibility.
             seq_to_display = None
             seq_to_display_brightness = None
             for sequence in column:
                 seq_len = len(sequence['chars'])
-                seq_bottom = int(sequence['final_char'] + 0.5) # final_char is a float because of different speeds, this is the same as round()
+                # final_char is a float because of different speeds, this is the same as round()
+                seq_bottom = int(sequence['final_char'] + 0.5)
                 seq_top = seq_bottom - seq_len + 1
-                if seq_top <= row_index <= seq_bottom: # sequence covers this row
-                    if sequence['colors'] == config['colors']: # after finding first fully bright sequence, use it
+                if seq_top <= row_index <= seq_bottom:  # sequence covers this row
+                    if sequence['colors'] == config['colors']:  # after finding first fully bright sequence, use it
                         seq_to_display = sequence
                         break
-                    
+
                     seq_brightness = config['background_colors'][sequence['colors']]
 
                     if not seq_to_display:
                         seq_to_display = sequence
                         seq_to_display_brightness = seq_brightness
                     else:
-                        if seq_brightness > seq_to_display_brightness: # if a sequence with higher brightness is found, use it
+                        if seq_brightness > seq_to_display_brightness:  # if a sequence with higher brightness is found, use it
                             seq_to_display = sequence
                             seq_to_display_brightness = config['background_colors'][seq_to_display['colors']]
 
@@ -288,8 +298,9 @@ def columns_to_rows(columns, config):
 
                 # Calculate display_index so that the head (index 0) is at the bottom.
                 display_index = seq_bottom - row_index
-                
-                if not seq_to_display['colors_extended']: # prevents constant lookups if the extended color has already been found/made
+
+                # prevents constant lookups if the extended color has already been found/made
+                if not seq_to_display['colors_extended']:
                     # sequences can have different lengths than there are colors, so we need to extend the colors
                     colors_extended = extend_colors(seq_to_display["colors"], seq_len, config)
                     seq_to_display['colors_extended'] = colors_extended
@@ -301,7 +312,7 @@ def columns_to_rows(columns, config):
 
                 color = colors_extended[color_index]
                 char = seq_to_display['chars'][display_index]
-                row.append(f"{color}{char}\u001b[0m") # \u001b[0m just resets the color (it isn't visible in the rain)
+                row.append(f"{color}{char}\u001b[0m")  # \u001b[0m just resets the color (it isn't visible in the rain)
         rows.append(''.join(row))
     return rows
 
@@ -319,9 +330,9 @@ def update_column(column, config):
         list: Updated list of sequences for the column.
     """
     new_column = []
-    if len(column) == 0: # if the column is empty, create a new sequence with some probability
+    if len(column) == 0:  # if the column is empty, create a new sequence with some probability
         return [make_sequence(config)] if random.random() < config["new_sequence_chance"] else []
-    
+
     for sequence in column:
         # if the sequence is fully below the last row, we don't want to append it to the new column list
         if sequence['final_char'] > (config["amount_of_rows"] + len(sequence['chars'])):
@@ -340,7 +351,7 @@ def update_column(column, config):
             for idx in range(len(sequence['chars'])):
                 if random.random() < config["random_char_change_chance"] and idx != 0:
                     sequence['chars'][idx] = random.choice(config["characters"])
-        
+
         sequence['final_char'] = new_final_char
         new_column.append(sequence)
 
@@ -351,7 +362,8 @@ def update_column(column, config):
         else:
             first_sequence = new_column[-1]
         if first_sequence['final_char'] >= len(first_sequence["chars"]) and random.random() < config["new_sequence_chance"]:
-            if config['visibility_priority'] == 'higher': # changes the order in which valid sequences are checked in columns_to_rows
+            # changes the order in which valid sequences are checked in columns_to_rows
+            if config['visibility_priority'] == 'higher':
                 new_column.insert(0, make_sequence(config))
             else:
                 new_column.append(make_sequence(config))
@@ -378,11 +390,11 @@ def update_columns(columns, config, clear):
     elif len(columns) < config["amount_of_columns"]:
         columns += [[] for _ in range(config["amount_of_columns"] - len(columns))]
         clear = True
-    
+
     if config['space_between_columns']:
         new_columns = []
         for i, column in enumerate(columns):
-            if i % 2 == 1: # there is no need to update sequences if they aren't visible
+            if i % 2 == 1:  # there is no need to update sequences if they aren't visible
                 new_columns.append(column)
             else:
                 new_columns.append(update_column(column, config))
@@ -427,14 +439,15 @@ def update_sequence_and_background_colors(config, columns):
     for column in columns:
         for sequence in column:
             sequence['colors_extended'] = []
-            if sequence['colors'] in old_background_colors: # sequence was a background color before color change
+            if sequence['colors'] in old_background_colors:  # sequence was a background color before color change
                 if make_random:
                     sequence['colors'] = random.choice(tuple(config['background_colors'].keys()))
                 else:
+                    # if possible keep the background color's brightness the same
                     index = old_background_colors.index(sequence['colors'])
-                    sequence['colors'] = tuple(config['background_colors'].keys())[index] # if possible keep the background color's brightness the same
+                    sequence['colors'] = tuple(config['background_colors'].keys())[index]
             else:
-                sequence['colors'] = config['colors'] # update the sequences colors if it isn't a background color
+                sequence['colors'] = config['colors']  # update the sequences colors if it isn't a background color
 
 
 # ______________________make_canonical______________________
@@ -453,7 +466,7 @@ def make_canonical(key, listener):
     """
     canonical_key = listener.canonical(key)
     # some keys get their names changed to None and change their type (for example esc, tab...), so we return the original
-    if type(key) == type(canonical_key):
+    if type(key) is type(canonical_key):
         return canonical_key
     else:
         return key
@@ -479,7 +492,7 @@ def key_to_str(key):
         if s.startswith("Key."):
             return s[4:].lower()
         return s.lower()
-    
+
 
 # ______________________on_press______________________
 def on_press(key, currently_pressed, lock):
@@ -565,7 +578,7 @@ def check_keys(currently_pressed, lock, count, columns, config):
 
     if keys_are_pressed(currently_pressed, lock, config, ['ctrl', 'c']):
         raise KeyboardInterrupt
-    
+
     # more speed:
     if time_passed[time_used] > 0.08 and config['time_between_frames'] > 0.001 and keys_are_pressed(currently_pressed, lock, config, config['controls']['speed_up']):
         count[time_used] = cur_time
@@ -580,7 +593,8 @@ def check_keys(currently_pressed, lock, count, columns, config):
 
     # pause:
     if time_passed[time_used] > 0.3 and keys_are_pressed(currently_pressed, lock, config, config['controls']['pause']):
-        while keys_are_pressed(currently_pressed, lock, config, config['controls']['pause']): time.sleep(0.01)
+        while keys_are_pressed(currently_pressed, lock, config, config['controls']['pause']):
+            time.sleep(0.01)
         while True:
             time.sleep(0.01)
             if keys_are_pressed(currently_pressed, lock, config, config['controls']['pause']):
@@ -692,7 +706,7 @@ def check_keys(currently_pressed, lock, count, columns, config):
             print('exit/e = leave without saving your config')
 
             while True:
-                command = input(f'> ').lower().strip()
+                command = input('> ').lower().strip()
 
                 if command in ['exit', 'e']:
                     break
@@ -765,7 +779,7 @@ def check_keys(currently_pressed, lock, count, columns, config):
 
                 if not load_file.endswith('.json'):
                     load_file += '.json'
-                    
+
                 if load_file not in file_names:
                     print("File wasn't found.\n")
                 else:
@@ -776,7 +790,7 @@ def check_keys(currently_pressed, lock, count, columns, config):
         hide_or_show_cursor(hide=True)
         clear = True
         update_colors = True
-    
+
     # first bold:
     if keys_are_pressed(currently_pressed, lock, config, config['controls']['first_bold']):
         colors = list(config["colors"])
@@ -891,7 +905,7 @@ def check_keys(currently_pressed, lock, count, columns, config):
                             print("Name is too long")
                         else:
                             break
-                
+
                 print("\nTo create a new list of colors you will enter each colors' RGB values like this: R, G, B.")
                 print('exit/e = leave when you are done creating individual colors')
                 i = 1
@@ -905,7 +919,7 @@ def check_keys(currently_pressed, lock, count, columns, config):
                         if user_input in ['e', 'exit']:
                             if len(colors) == 0:
                                 make_color = False
-                            if len(colors) == 1: # if color length were 1, it would cause indexing issues in some places
+                            if len(colors) == 1:  # if color length were 1, it would cause indexing issues in some places
                                 colors.append(colors[0])
                             break
 
@@ -980,7 +994,6 @@ def check_keys(currently_pressed, lock, count, columns, config):
         update_colors = True
         hide_or_show_cursor(hide=True)
         clear = True
-
 
     # background:
     if keys_are_pressed(currently_pressed, lock, config, config['controls']['change_background_brightness']):
@@ -1071,7 +1084,7 @@ def check_keys(currently_pressed, lock, count, columns, config):
             elif add == 'r':
                 config["characters"] = chars if chars else ' '
             break
-        
+
         hide_or_show_cursor(hide=True)
         clear = True
 
@@ -1177,7 +1190,7 @@ def check_keys(currently_pressed, lock, count, columns, config):
                     def listen_for_stop(key, stop_key):
                         stop_key.append(key_to_str(key))
                         return False
-                    
+
                     while True:
                         stop_key = []
                         print("\nPress the key that will stop the listening.")
@@ -1206,10 +1219,11 @@ def check_keys(currently_pressed, lock, count, columns, config):
 
                     while True:
                         captured_keys = set()
+
                         def on_press_with_stop(key):
                             key = key_to_str(key)
                             if key == stop_key:
-                                return False 
+                                return False
                             captured_keys.add(key)
                             print(f"keys pressed so far: {', '.join(captured_keys)}")
 
@@ -1308,7 +1322,7 @@ background_colors = {config["background_colors"]}
         print()
         hide_or_show_cursor(show=True)
         print(f'''Controls:
-    
+
     {', '.join(config['controls']['show_help_message'])} = show help message
     {', '.join(config['controls']['cur_values'])} = display current values
 
@@ -1326,12 +1340,12 @@ background_colors = {config["background_colors"]}
 
     {', '.join(config['controls']['more_random_char'])} = increase chance for characters to change mid-sequence
     {', '.join(config['controls']['less_random_char'])} = decrease chance for characters to change mid-sequence
-              
+
     {', '.join(config['controls']['less_rows'])} = shorten matrix length (rows)
     {', '.join(config['controls']['more_rows'])} = increase matrix length (rows)
     {', '.join(config['controls']['less_columns'])} = reduce number of columns
     {', '.join(config['controls']['more_columns'])} = increase number of columns
-              
+
     {', '.join(config['controls']['more_new_sequence_chance'])} = increase the chance of a new sequence starting (relative to current chance)
     {', '.join(config['controls']['less_new_sequence_chance'])} = decrease the chance of a new sequence starting (relative to current chance)
 
@@ -1343,7 +1357,7 @@ background_colors = {config["background_colors"]}
     {', '.join(config['controls']['red'])} = change color to red
     {', '.join(config['controls']['create_color'])} = create a new color or use your created colors
     {', '.join(config['controls']['change_background_brightness'])} = create a background by making some sequences less bright
-              
+
     {', '.join(config['controls']['chars_01'])} = change characters to "01"
     {', '.join(config['controls']['chars_original'])} = reset characters to original set
     {', '.join(config['controls']['set_any_chars'])} = prompt for input to add or replace characters
@@ -1354,7 +1368,7 @@ background_colors = {config["background_colors"]}
     {', '.join(config['controls']['change_controls'])} = change your controls
     {', '.join(config['controls']['disable_controls'])} = disable keyboard controls temporarily
     {', '.join(config['controls']['enable_controls'])} = re-enable keyboard controls
-              
+
     ctrl+c = stop matrix rain
 ''')
         input('Press enter to continue...')
@@ -1381,7 +1395,7 @@ def clear_if_necessary(clear, config, terminal_size=None, old_terminal_size=None
     """
     if not (terminal_size and old_terminal_size):
         return
-    
+
     if old_terminal_size != terminal_size:
         clear = True
 
@@ -1432,10 +1446,10 @@ def get_config(file_name=CONFIG_FILE, dir_name=CONFIG_DIR_NAME):
             print(f'''\nThe folder "{CONFIG_DIR_NAME}" isn't valid. Reason:''')
             print(f"{e}\n")
             print('The global variables will be used instead.')
-            input('Press enter to continue...') 
+            input('Press enter to continue...')
     else:
         print("pathvalidate not installed; skipping folder validation.")
-        input('Press enter to continue...') 
+        input('Press enter to continue...')
         folder_is_valid = True
 
     try:
@@ -1461,7 +1475,7 @@ def get_config(file_name=CONFIG_FILE, dir_name=CONFIG_DIR_NAME):
             if file_is_valid:
                 script_dir = os.path.dirname(os.path.abspath(__file__))
                 config_dir = os.path.join(script_dir, dir_name)
-                os.makedirs(config_dir, exist_ok=True) # make the folder if it doesn't exist
+                os.makedirs(config_dir, exist_ok=True)  # make the folder if it doesn't exist
                 file_path = os.path.join(config_dir, file_name)
 
                 with open(file_path, 'r', encoding="utf-8") as file:
@@ -1472,7 +1486,7 @@ def get_config(file_name=CONFIG_FILE, dir_name=CONFIG_DIR_NAME):
                     config['file_name'] = file_name
                     config['background_colors'] = {}
                     config['colors'] = tuple(config['colors'])
-                    
+
                     for key in config['custom_colors']:
                         config['custom_colors'][key] = tuple(config['custom_colors'][key])
 
@@ -1481,10 +1495,10 @@ def get_config(file_name=CONFIG_FILE, dir_name=CONFIG_DIR_NAME):
                             config['controls'][control] = config['controls'][control].split(' ')
                         except AttributeError:
                             pass
-                        
+
                     hide_or_show_cursor(hide=True)
                     return config
-                
+
     except FileNotFoundError:
         print(f'''The file "{file_name}" wasn't found.''')
         print('The global variables will be used instead.')
@@ -1536,27 +1550,24 @@ def save_config(config, update=False, dir_name=CONFIG_DIR_NAME):
         update (bool): If True, update the existing file; otherwise, create a new file.
         dir_name (str): Directory to save the configuration file.
     """
-    hide_or_show_cursor(show=True)
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    config_dir = os.path.join(script_dir, dir_name)
-    os.makedirs(config_dir, exist_ok=True)
-
     if PATHVALIDATE_AVAILABLE:
         try:
             pathvalidate.validate_filename(filename=dir_name)
-            folder_is_valid = True
         except pathvalidate.ValidationError as e:
-            folder_is_valid = False
             print(f'''\nThe folder "{dir_name}" isn't valid. Reason:''')
             print(f"{e}\n")
             print("You won't be able to save your config")
-            input('Press enter to continue...') 
+            input('Press enter to continue...')
             hide_or_show_cursor(hide=True)
             return
     else:
         print("pathvalidate not installed; skipping folder validation.")
         input('Press enter to continue...')
-        folder_is_valid = True
+
+    hide_or_show_cursor(show=True)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    config_dir = os.path.join(script_dir, dir_name)
+    os.makedirs(config_dir, exist_ok=True)
 
     # makes sure not change config when modifying it to save:
     s_config = {}
@@ -1580,14 +1591,14 @@ def save_config(config, update=False, dir_name=CONFIG_DIR_NAME):
         file_name = config['file_name']
         if not file_name.endswith(".json"):
             file_name += ".json"
-        
+
         file_path = os.path.join(config_dir, file_name)
 
         with open(file_path, 'w', encoding="utf-8") as file:
             json.dump(s_config, file, indent=4)
     else:
         file_names = [f for f in os.listdir(config_dir) if os.path.isfile(os.path.join(config_dir, f))]
-        
+
         numbers_used = []
         for file in file_names:
             file = file.replace('.json', '')
@@ -1599,14 +1610,14 @@ def save_config(config, update=False, dir_name=CONFIG_DIR_NAME):
             if str(new_number) not in numbers_used:
                 break
             new_number += 1
-        
+
         file_name = f'config{new_number}.json'
 
         while True:
             print(f'\nDo you want to save to "{file_name}"?')
             print('yes/y = save to this file')
             print('no/n = create a new name')
-            make_custom_name = input(f'> ').lower().strip()
+            make_custom_name = input('> ').lower().strip()
 
             if make_custom_name in ['y', 'yes']:
                 make_custom_name = False
@@ -1614,7 +1625,7 @@ def save_config(config, update=False, dir_name=CONFIG_DIR_NAME):
             elif make_custom_name in ['n', 'no']:
                 make_custom_name = True
                 break
-        
+
         if make_custom_name:
             while True:
                 print('\nEnter the name you would like to use. ')
@@ -1631,7 +1642,7 @@ def save_config(config, update=False, dir_name=CONFIG_DIR_NAME):
                         continue
                 else:
                     print("pathvalidate not installed; skipping file validation.")
-                    input('Press enter to continue...') 
+                    input('Press enter to continue...')
 
                 if new_name in file_names:
                     print(f'\n{new_name} already exists.')
@@ -1661,10 +1672,11 @@ def run_matrix():
     the animation until interrupted.
     """
     try:
-        config = get_config() # load config from a file or use global variables
+        config = get_config()  # load config from a file or use global variables
 
-        columns = [[] for _ in range(config["amount_of_columns"])] # initialize columns
-        count = [time.time() for _ in range(15)] # intialize count, make sure to update range() when adding new controls that use this
+        columns = [[] for _ in range(config["amount_of_columns"])]  # initialize columns
+        # intialize count, make sure to update range() when adding new controls that use this
+        count = [time.time() for _ in range(15)]
         try:
             old_terminal_size = os.get_terminal_size()
         except OSError:
@@ -1708,10 +1720,9 @@ def run_matrix():
             old_terminal_size = terminal_size
             clear = False
 
-            sys.stdout.write("\u001b[H" + rows + "\n") # \u001b[H moves the cursor to row and column 0
+            sys.stdout.write("\u001b[H" + rows + "\n")  # \u001b[H moves the cursor to row and column 0
             sys.stdout.flush()
 
-            
             end_time = start_time + config["time_between_frames"]
             while True:
                 if config['controls_activated'] and currently_pressed:

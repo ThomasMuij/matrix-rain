@@ -148,10 +148,10 @@ def check_keys():
 # Main animation loop
 while True:
     # Do your animation updates here...
-    
+
     # Check the keyboard state
     check_keys()
-    
+
     # Sleep for a short period to keep the loop efficient
     time.sleep(0.01)
 """
