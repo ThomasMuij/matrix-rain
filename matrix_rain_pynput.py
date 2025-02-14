@@ -439,8 +439,20 @@ def update_sequence_and_background_colors(config, columns):
 
 # ______________________make_canonical______________________
 def make_canonical(key, listener):
-    canonical_key = listener.canonical(key)
+    """
+    Return the canonical key event using the listener's canonical() method.
 
+    If the type of the canonical key matches the original, return it; otherwise, return the original.
+
+    Args:
+        key: A key event (from pynput).
+        listener: A listener with a canonical() method.
+
+    Returns:
+        A key event: either the canonical version or the original.
+    """
+    canonical_key = listener.canonical(key)
+    # some keys get their names changed to None and change their type (for example esc, tab...), so we return the original
     if type(key) == type(canonical_key):
         return canonical_key
     else:
