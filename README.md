@@ -2,18 +2,9 @@
 
 A customizable terminal-based simulation of the iconic "Matrix rain" effect, written in Python.
 
-## Features
-
-- **Real-time Animation:** Enjoy a continuously updating matrix rain effect directly in your terminal.
-- **Configurable Parameters:** Change speed, sequence length, color gradients, and more on the fly.
-- **Dynamic Keyboard Controls:** Use intuitive keyboard commands to pause, speed up, slow down, and modify the rain effect while it’s running.
-- **Customizable Appearance:** Toggle modes, set custom characters, and adjust background brightness.
-- **Save & Load Configurations:** Save your preferred settings to a file and load them later.
-- **Automatic Terminal Sizing:** (Optional) Adjusts the matrix size to fit your terminal window.
-
 ## Demo
 
-_Add video here (e.g., link to a demo video or GIF showcasing the matrix rain in action)._
+![Demo GIF](images/demo.gif)
 
 ## Installation
 
@@ -25,14 +16,13 @@ _Add video here (e.g., link to a demo video or GIF showcasing the matrix rain in
   - [keyboard](https://pypi.org/project/keyboard/): For keyboard event handling. (might cause some issues)
   - [pathvalidate](https://pypi.org/project/pathvalidate/): For validating file and folder names when saving/loading configurations.
 
-### Setting Up
+## Setting Up
 
 1. **Clone the repository:**
 
    ```bash
    git clone https://github.com/yourusername/matrix-rain.git
    cd matrix-rain
-
 If you plan to use all the features (keyboard controls and config validation), install:
 
     pip install pathvalidate
@@ -45,42 +35,22 @@ You can also use:
 
     pip install keyboard
 
-Usage
+## Usage
 Run the project with:
 
     python matrix_rain_pynput.py
 Or:
 
     python matrix_rain_keyboard.py
-Once running, the matrix rain will animate in your terminal. Use the keyboard controls (see the help screen by pressing the designated key (h)) to adjust settings in real time.
+Once running, the matrix rain will animate in your terminal. Use the keyboard controls (see the help screen by pressing the designated key "h") to adjust settings in real time.
 
-Keyboard Controls
+## Customization
 
-Speed Up / Slow Down: Adjust the animation speed.
-Pause/Resume: Temporarily pause the animation.
-Toggle Modes: Change how the characters in each sequence are updated.
-Adjust Dimensions: Increase or decrease the number of rows and columns.
-Change Colors: Switch between different color schemes or create your own.
-Save/Load Configuration: Save your current settings or load a configuration file.
-Show Help: Display a detailed list of all controls.
-For a complete list of controls, press the help key while the program is running.
+- **Configuration File**: You can save your settings to a JSON file (in the config_pynput or config_keyboard folder) and load them later. See the on-screen prompts for instructions.
 
-Customization
-Configuration File: You can save your settings to a JSON file (in the config_pynput folder) and load them later. See the on-screen prompts for instructions.
-Editing the Code: The project is structured in a single file, but you can refactor it further into modules for better maintainability.
-Terminal Size: With the auto-size option enabled, the matrix will adjust to your terminal window dimensions.
-Contributing
-Contributions are welcome! If you’d like to improve the code or add new features, please follow these steps:
+- **Controls:** You can change almost everything using the controls (even the control's keys). To view the controls press "h" while the matrix rain is running. You can also just edit the json files if you want.
 
-Fork the repository.
-Create a new branch (git checkout -b feature-branch).
-Commit your changes with clear commit messages.
-Open a pull request with a description of your changes.
-Before contributing, please ensure your code is clean, well-documented, and adheres to the project’s style.
-
-License
-This project is licensed under the MIT License. See the LICENSE file for details.
-
-Acknowledgements
-Inspired by the iconic Matrix movie.
-Special thanks to all contributors and the open source community for tools and libraries used in this project.
+## Extra information
+- This is my first project and I learned most of the stuff in it while making it. So if you spot any possible issues, bad practices or want me to add a new feautre, feel free to tell me.
+- The program was only tested on windows.
+- To avoid flickering I am using escape sequences to move the cursor and rewrite the frames instead of clearing the terminal every time. However, if the terminal size is smaller than the animation size, this would cause some prints to remain just keep multiplying. I fixed this by clearing the terminal if it isn't big enough, but this might cause flickering when the animation gets bigger or faster.
