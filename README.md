@@ -21,7 +21,7 @@ This is only 1 example. You can make custom colors, change the characters, diffe
 **Clone the repository:**
 
 ```bash
-git clone https://github.com/yourusername/matrix-rain.git
+git clone https://github.com/ThomasMuij/matrix-rain.git
 cd matrix-rain
 ```
 If you plan to use all the features (keyboard controls and config validation), install:

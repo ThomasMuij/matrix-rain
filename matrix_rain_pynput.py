@@ -107,9 +107,7 @@ CONTROLS = {
 
 # ______________________hide_or_show_cursor______________________
 def hide_or_show_cursor(hide=False, show=False):
-    """
-    Hide or show the terminal cursor.
-    """
+    """Hide or show the terminal cursor."""
     if hide:
         sys.stdout.write("\u001b[?25l")
         sys.stdout.flush()
@@ -120,9 +118,7 @@ def hide_or_show_cursor(hide=False, show=False):
 
 # ______________________flush_stdin______________________
 def flush_stdin():
-    """
-    Flush the standard input buffer to remove any pending keyboard input.
-    """
+    """Flush the standard input buffer to remove any pending keyboard input."""
     if os.name == 'nt':
         import msvcrt
         while msvcrt.kbhit():
@@ -1229,8 +1225,8 @@ def check_keys(currently_pressed: set, lock, count: list, columns: list, config:
 
                         time.sleep(0.2)
                         print("\nListening for keys")
-                        with keyboard.Listener(on_press=lambda key: on_press_with_stop(make_canonical(key, l))) as l:
-                            l.join()
+                        with keyboard.Listener(on_press=lambda key: on_press_with_stop(make_canonical(key, listen))) as listen:
+                            listen.join()
 
                         flush_stdin()
                         replace = True
@@ -1401,7 +1397,7 @@ def clear_if_necessary(clear: bool, config: dict, terminal_size=None, old_termin
 
     # if the rows reach below the terminal size, keep clearing
     # if this didn't happen, it would result in the terminal having all previous frames
-    if terminal_size.lines <= config["amount_of_rows"] * (1 + (config["amount_of_columns"] - 1) // terminal_size.columns):
+    if terminal_size.lines <= config["amount_of_rows"] * (1 + (config["amount_of_columns"] - 1)//terminal_size.columns):
         clear = True
 
     if clear:
