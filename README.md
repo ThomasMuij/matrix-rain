@@ -2,10 +2,10 @@
 
 A customizable terminal-based simulation of the iconic "Matrix rain" effect, written in Python.
 
-## Demo
+## Example of one configuration
 
 ![Demo GIF](images/demo.gif)
-
+This is only 1 example. You can make custom colors, change the characters, difference in speeds, background and much more.
 ## Installation
 
 ### Prerequisites
@@ -18,30 +18,35 @@ A customizable terminal-based simulation of the iconic "Matrix rain" effect, wri
 
 ## Setting Up
 
-1. **Clone the repository:**
+**Clone the repository:**
 
-   ```bash
-   git clone https://github.com/yourusername/matrix-rain.git
-   cd matrix-rain
+```bash
+git clone https://github.com/yourusername/matrix-rain.git
+cd matrix-rain
+```
 If you plan to use all the features (keyboard controls and config validation), install:
-
-    pip install pathvalidate
+```bash
+pip install pathvalidate
+```
 Otherwise, if you do not require file/folder validation, you can run without pathvalidate.
 
 Recommended:
-
-    pip install pynput
+```bash
+pip install pynput
+```
 You can also use:
-
-    pip install keyboard
-
+```bash
+pip install keyboard
+```
 ## Usage
 Run the project with:
-
-    python matrix_rain_pynput.py
+```bash
+python matrix_rain_pynput.py
+```
 Or:
-
-    python matrix_rain_keyboard.py
+```bash
+python matrix_rain_keyboard.py
+```
 Once running, the matrix rain will animate in your terminal. Use the keyboard controls (see the help screen by pressing the designated key "h") to adjust settings in real time.
 
 ## Customization
