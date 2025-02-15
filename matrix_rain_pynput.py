@@ -1158,7 +1158,6 @@ def check_keys(currently_pressed: set, lock, count: list, columns: list, config:
         print('save/s = save changes')
         print('exit/e = exit without chaning controls')
         while True:
-            go_back = False
             print('\nEnter the name of the control you would like to change:')
             control = input('> ').lower().strip()
             if control in ['o', 'old']:
