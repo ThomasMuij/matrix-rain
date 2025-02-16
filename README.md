@@ -39,13 +39,17 @@ You can also use:
 pip install keyboard
 ```
 ## Usage
-Run the project with:
+No keyboard input:
 ```bash
-python matrix_rain_pynput.py
+python matrix_rain.py
 ```
-Or:
+Using pynput:
 ```bash
-python matrix_rain_keyboard.py
+python matrix_pynput.py
+```
+Using keyboard:
+```bash
+python matrix_keyboard.py
 ```
 Once running, the matrix rain will animate in your terminal. Use the keyboard controls (see the help screen by pressing the designated key "h") to adjust settings in real time.
 
