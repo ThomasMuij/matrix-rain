@@ -78,16 +78,16 @@ def parse_ansi_color(ansi: str):
 
 
 # ______________________extend_colors______________________
-def extend_colors(default_colors: tuple, new_length: int, config: dict):
+def extend_colors(original_colors: tuple, new_length: int, config: dict):
     """
     Generate an extended gradient of ANSI color codes by interpolating between given colors.
 
-    This function interpolates between the colors provided in `default_colors` to create
+    This function interpolates between the colors provided in `original_colors` to create
     a gradient with `new_length` colors. It caches results in the configuration's 
     "extended_color_cache" to avoid redundant calculations.
 
     Args:
-        default_colors (tuple): A tuple of ANSI escape codes representing colors.
+        original_colors (tuple): A tuple of ANSI escape codes representing colors.
         new_length (int): The desired number of colors in the extended gradient.
         config (dict): Configuration dictionary that includes caching information.
 
@@ -95,7 +95,7 @@ def extend_colors(default_colors: tuple, new_length: int, config: dict):
         list: A list of ANSI escape codes representing the extended color gradient.
     """
     max_cache_size = 250
-    key = (tuple(default_colors), new_length)
+    key = (tuple(original_colors), new_length)
     cache = config["extended_color_cache"]
 
     if key in cache:
@@ -104,25 +104,25 @@ def extend_colors(default_colors: tuple, new_length: int, config: dict):
         return cache[key]
 
     if new_length <= 1:
-        cache[key] = default_colors
+        cache[key] = original_colors
         cache.move_to_end(key)
         if len(cache) > max_cache_size:
             cache.popitem(last=False)
-        return default_colors
+        return original_colors
 
     extended = []
-    n = len(default_colors)
+    n = len(original_colors)
     for i in range(new_length):
         t = i / (new_length - 1)  # relative position in the new color list
-        pos = t * (n - 1)  # find index(float) in default colors that's at the same relative position as in the new one
+        pos = t * (n - 1)  # find index(float) in original colors that's at the same relative position as in the new one
         idx = int(pos)
         # Fractional distance between idx and the next color, used for interpolation (ranges from 0 to 1).
         # If idx is the last color, set t2 to 1.0 to avoid out-of-bounds errors.
         t2 = pos - idx if idx < n - 1 else 1.0
         # find the r, g, b components of the first color with a smaller index
-        rgb1, is_bold1 = parse_ansi_color(default_colors[idx])
+        rgb1, is_bold1 = parse_ansi_color(original_colors[idx])
         # find the next color, if we are the end of the list take the last one itself
-        rgb2, is_bold2 = parse_ansi_color(default_colors[min(idx + 1, n - 1)])
+        rgb2, is_bold2 = parse_ansi_color(original_colors[min(idx + 1, n - 1)])
         # find the weighted average between the 2 colors based on the distance from the first one:
         r = int(round(rgb1[0] * (1 - t2) + rgb2[0] * t2))
         g = int(round(rgb1[1] * (1 - t2) + rgb2[1] * t2))
@@ -1249,9 +1249,7 @@ def get_config(file_name=CONFIG_FILE, dir_name=CONFIG_DIR_NAME):
                     config['dir_name'] = dir_name
                     config['background_colors'] = {}
                     config['colors'] = tuple(config['colors'])
-
-                    for key in config['custom_colors']:
-                        config['custom_colors'][key] = tuple(config['custom_colors'][key])
+                    config['custom_colors'] = {key: tuple(value) for key, value in config['custom_colors'].items()}
 
                     for control in config['controls'].copy():
                         try:
@@ -1484,8 +1482,13 @@ def save_config(config: dict, update=False, dir_name=None):
     hide_or_show_cursor(hide=True)
 
 
+def filler_func(*args, **kwargs):
+    """This function is used when no keyboard input is necessary."""
+    pass
+
+
 # ______________________run_matrix______________________
-def run_matrix(update_pressed_keys: callable, change_controls: callable, config=None):
+def run_matrix(update_pressed_keys=filler_func, change_controls=filler_func, config=None):
     """
     Run the Matrix rain animation in the terminal.
 
@@ -1508,8 +1511,10 @@ def run_matrix(update_pressed_keys: callable, change_controls: callable, config=
         columns = [[] for _ in range(config["amount_of_columns"])]  # initialize columns
         # intialize count, make sure to update range() when adding new controls that use this
         count = [time.time() for _ in range(15)]
+        term_size_debounce = time.time()
         try:
-            old_terminal_size = os.get_terminal_size()
+            terminal_size = os.get_terminal_size()
+            old_terminal_size = terminal_size
         except OSError:
             old_terminal_size = None
         clear = True
@@ -1522,10 +1527,13 @@ def run_matrix(update_pressed_keys: callable, change_controls: callable, config=
 
         while True:
             start_time = time.time()
-            try:
-                terminal_size = os.get_terminal_size()
-            except OSError:
-                terminal_size = None
+
+            if time.time() - term_size_debounce > 0.15:
+                try:
+                    terminal_size = os.get_terminal_size()
+                    term_size_debounce = time.time()
+                except OSError:
+                    terminal_size = None
 
             if update_colors:
                 update_sequence_and_background_colors(config, columns)
@@ -1539,11 +1547,11 @@ def run_matrix(update_pressed_keys: callable, change_controls: callable, config=
 
             clear_if_necessary(clear, config, terminal_size, old_terminal_size)
             old_terminal_size = terminal_size
-            clear = False
 
             sys.stdout.write("\u001b[H" + rows + "\n")  # \u001b[H moves the cursor to row and column 0
             sys.stdout.flush()
 
+            clear = False
             end_time = start_time + config["time_between_frames"]
             while True:
                 if config['controls_activated'] and currently_pressed:
@@ -1575,10 +1583,5 @@ def run_matrix(update_pressed_keys: callable, change_controls: callable, config=
         print('\nMatrix rain stopped')
 
 
-def filler_func(*args, **kwargs):
-    """This function is used when no keyboard input is necessary."""
-    pass
-
-
 if __name__ == '__main__':
-    run_matrix(filler_func, filler_func)
+    run_matrix()

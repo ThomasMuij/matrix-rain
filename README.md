@@ -59,7 +59,7 @@ Once running, the matrix rain will animate in your terminal. Use the keyboard co
 
 - **Configuration File**: You can save your settings to a JSON file (in the config_pynput or config_keyboard folder) and load them later. See the on-screen prompts for instructions.
 
-- **Controls:** You can change almost everything using the controls (even the control's keys). To view the controls press "h" while the matrix rain is running. You can also just edit the json files if you want.
+- **Controls:** You can change almost everything using the controls (even the control's keys). To view the controls press "**h**" while the matrix rain is running. You can also just edit the json files if you want.
 
 ## Extra information
 - This is my first project and I learned most of the stuff in it while making it. So if you spot any possible issues, bad practices or want me to add a new feautre, feel free to tell me.
