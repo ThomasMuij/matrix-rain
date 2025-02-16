@@ -68,19 +68,13 @@ def parse_ansi_color(ansi: str):
                indicating if the text is bold.
     """
     is_bold = False
-    if ansi == "\u001b[0m":
-        return (255, 255, 255), is_bold
-    try:
-        parts = ansi.split('[')[1].rstrip("m").split(";")
-        if len(parts) == 6 and parts[0] in ['0', '1']:
-            if parts[0] == '1':
-                is_bold = True
-            parts.pop(0)
-        if parts[0] == "38" and parts[1] == "2" and len(parts) >= 5:
-            return (int(parts[2]), int(parts[3]), int(parts[4])), is_bold
-    except Exception:
-        pass
-    return (255, 255, 255), is_bold
+    parts = ansi.split('[')[1].rstrip("m").split(";")
+    if len(parts) == 6 and parts[0] in ['0', '1']:
+        if parts[0] == '1':
+            is_bold = True
+        parts.pop(0)
+    if parts[0] == "38" and parts[1] == "2" and len(parts) >= 5:
+        return (int(parts[2]), int(parts[3]), int(parts[4])), is_bold
 
 
 # ______________________extend_colors______________________
@@ -281,11 +275,10 @@ def update_column(column: list, config: dict):
 
         new_final_char = sequence['final_char'] + sequence['speed']
 
-        if config["mode"]:
-            # Shift the sequence if it moves down this frame. (final_char from 2.3 to 2.4 would not move down)
-            if int(sequence['final_char'] + 0.5) != int(new_final_char + 0.5):
-                sequence['chars'].pop()
-                sequence['chars'].insert(0, random.choice(config["characters"]))
+        if config["mode"] and int(sequence['final_char'] + 0.5) != int(new_final_char + 0.5):
+            # Shift the sequence chars if it moves down this frame. (final_char from 2.3 to 2.4 would not move down)
+            sequence['chars'].pop()
+            sequence['chars'].insert(0, random.choice(config["characters"]))
 
         # chance to change a character that is not the first/lowest one to a new random character
         if config["random_char_change_chance"]:
@@ -300,13 +293,13 @@ def update_column(column: list, config: dict):
     if new_column:
         if config['visibility_priority'] == 'higher':
             first_sequence = new_column[0]
-        else:
+        elif config['visibility_priority'] == 'lower':
             first_sequence = new_column[-1]
         if first_sequence['final_char'] >= len(first_sequence["chars"]) and random.random() < config["new_sequence_chance"]:
             # changes the order in which valid sequences are checked in columns_to_rows
             if config['visibility_priority'] == 'higher':
                 new_column.insert(0, make_sequence(config))
-            else:
+            elif config['visibility_priority'] == 'lower':
                 new_column.append(make_sequence(config))
     return new_column
 
@@ -688,7 +681,7 @@ def check_keys(currently_pressed: set, lock, count: list, columns: list, config:
     # first white
     if keys_are_pressed(currently_pressed, lock, config, config['controls']['first_white']):
         colors = list(config["colors"])
-        colors[0] = "\u001b[0m"  # Reset to default white
+        colors[0] = "\u001b[38;2;255;255;255m"
         config["colors"] = tuple(colors)
         update_colors = True
 
@@ -794,40 +787,42 @@ def check_keys(currently_pressed: set, lock, count: list, columns: list, config:
                 colors = []
                 make_color = True
                 while True:
+                    print(f'\nColor {i}:')
+                    user_input = input('> ').replace(' ', '').lower()
+
+                    if user_input in ['e', 'exit']:
+                        if len(colors) == 0:
+                            make_color = False
+                        if len(colors) == 1:  # if color length were 1, it would cause indexing issues in some places
+                            colors.append(colors[0])
+                        break
+
+                    rgb = user_input.split(',')
+                    if len(rgb) != 3:
+                        print("Please enter 3 values: R, G, B (for example: 150, 255, 0)")
+                        continue
+                    go_back = False
+
                     try:
-                        print(f'\nColor {i}:')
-                        user_input = input('> ').replace(' ', '').lower()
-
-                        if user_input in ['e', 'exit']:
-                            if len(colors) == 0:
-                                make_color = False
-                            if len(colors) == 1:  # if color length were 1, it would cause indexing issues in some places
-                                colors.append(colors[0])
-                            break
-
-                        rgb = user_input.split(',')
-                        if len(rgb) != 3:
-                            print("Please enter 3 values: R, G, B (for example: 150, 255, 0)")
-                            continue
-                        go_back = False
                         for value in rgb:
                             value = float(value)
                             if not 0 <= value <= 255:
                                 print('Values have to range from 0 to 255')
                                 go_back = True
                                 break
-                        if go_back:
-                            continue
-                        r, g, b = rgb
-                        colors.append(f"\u001b[38;2;{r};{g};{b}m")
-                        i += 1
-
-                        if i > 12:
-                            print("Maximum number of colors reached (12).")
-                            break
-
                     except ValueError:
                         print("RGB values have to be numbers")
+                        continue
+                    if go_back:
+                        continue
+
+                    r, g, b = rgb
+                    colors.append(f"\u001b[38;2;{r};{g};{b}m")
+                    i += 1
+
+                    if i > 12:
+                        print("Maximum number of colors reached (12).")
+                        break
                 if make_color:
                     config['custom_colors'][name] = tuple(colors)
                     print('Color has been added successfully.')
@@ -891,43 +886,43 @@ def check_keys(currently_pressed: set, lock, count: list, columns: list, config:
         print("exit/e = if you dont't want to make any more backgrounds (if you haven't entered any new values, the old values will be kept)")
         i = 1
         while True:
-            try:
-                print(f'\nBackground {i} reduction rate:')
-                reduction_rate = input('> ').strip().lower()
-                if reduction_rate in ['e', 'exit']:
-                    if len(config['background_brightness_reduction']) != 0:
-                        break
-                    else:
-                        config['background_brightness_reduction'] = old_values
-                        break
-
-                reduction_rate = float(reduction_rate)
-
-                if not 0 < reduction_rate < 1:
-                    print('Reduction rate has to be between 0 and 1.')
-                    continue
-                config['background_brightness_reduction'].append(reduction_rate)
-                i += 1
-
-                if i > 3:
-                    print("You have entered all 3 available background colors.")
+            print(f'\nBackground {i} reduction rate:')
+            reduction_rate = input('> ').strip().lower()
+            if reduction_rate in ['e', 'exit']:
+                if len(config['background_brightness_reduction']) != 0:
                     break
+                else:
+                    config['background_brightness_reduction'] = old_values
+                    break
+            
+            try:
+                reduction_rate = float(reduction_rate)
             except ValueError:
                 print('Reduction rate has to be a number.')
                 continue
 
-        while True:
-            try:
-                print(f"\nEnter the chance for a sequence to become part of the background(previous: {config['background_chance']}): ")
-                background_chance = float(input('> '))
-                if not 0 <= background_chance <= 1:
-                    print('Background chance has to be from 0 to 1.')
-                    continue
-                config['background_chance'] = background_chance
+            if not 0 < reduction_rate < 1:
+                print('Reduction rate has to be between 0 and 1.')
+                continue
+            config['background_brightness_reduction'].append(reduction_rate)
+            i += 1
+
+            if i > 3:
+                print("You have entered all 3 available background colors.")
                 break
+
+        while True:
+            print(f"\nEnter the chance for a sequence to become part of the background(previous: {config['background_chance']}): ")
+            try:
+                background_chance = float(input('> '))
             except ValueError:
                 print('Background chance has to be a number.')
+                continue                    
+            if not 0 <= background_chance <= 1:
+                print('Background chance has to be from 0 to 1.')
                 continue
+            config['background_chance'] = background_chance
+            break
 
         hide_or_show_cursor(hide=True)
         update_colors = True
@@ -983,15 +978,16 @@ def check_keys(currently_pressed: set, lock, count: list, columns: list, config:
                 min_speed = float(input('> '))
                 print(f'\nNew max speed for sequences (previous: {config["max_sequence_speed"]}):')
                 max_speed = float(input('> '))
-
-                if min_speed > max_speed:
-                    print("Min speed can't be more than max speed.")
-                elif min_speed <= 0 or max_speed <= 0:
-                    print("Min and max speed have to be greater than 0.")
-                else:
-                    break
             except ValueError:
                 print('Min and max speed have to be numbers.')
+                continue
+
+            if min_speed > max_speed:
+                print("Min speed can't be more than max speed.")
+            elif min_speed <= 0 or max_speed <= 0:
+                print("Min and max speed have to be greater than 0.")
+            else:
+                break
 
         config["min_sequence_speed"] = min_speed
         config["max_sequence_speed"] = max_speed
@@ -1010,16 +1006,18 @@ def check_keys(currently_pressed: set, lock, count: list, columns: list, config:
                 min_length = int(input('> '))
                 print(f'\nNew max length for sequences (previous: {config["max_sequence_length"]}):')
                 max_length = int(input('> '))
-                if min_length > max_length:
-                    print("Min length can't be more than max length.")
-                elif min_length <= 0 or max_length <= 0:
-                    print("Min and max length have to be greater than 0.")
-                elif max_length > 40:
-                    print("Max length can't exceed 40.")
-                else:
-                    break
             except ValueError:
                 print('Min and max length have to be whole numbers.')
+                continue
+
+            if min_length > max_length:
+                print("Min length can't be more than max length.")
+            elif min_length <= 0 or max_length <= 0:
+                print("Min and max length have to be greater than 0.")
+            elif max_length > 40:
+                print("Max length can't exceed 40.")
+            else:
+                break
 
         config["min_sequence_length"] = min_length
         config["max_sequence_length"] = max_length
@@ -1216,32 +1214,32 @@ def get_config(file_name=CONFIG_FILE, dir_name=CONFIG_DIR_NAME):
         input('Press enter to continue...')
         folder_is_valid = True
 
-    try:
-        if file_name and folder_is_valid:
-            if not file_name.endswith(".json"):
-                file_name += ".json"
+    if file_name and folder_is_valid:
+        if not file_name.endswith(".json"):
+            file_name += ".json"
 
-            if PATHVALIDATE_AVAILABLE:
-                try:
-                    pathvalidate.validate_filename(filename=file_name)
-                    file_is_valid = True
-                except pathvalidate.ValidationError as e:
-                    print("The file you have chosen isn't valid.")
-                    print(f"{e}\n")
-                    print('The default values will be used instead.')
-                    input('Press enter to continue...')
-                    file_is_valid = True
-            else:
-                print("pathvalidate not installed; skipping file validation.")
+        if PATHVALIDATE_AVAILABLE:
+            try:
+                pathvalidate.validate_filename(filename=file_name)
+                file_is_valid = True
+            except pathvalidate.ValidationError as e:
+                print("The file you have chosen isn't valid.")
+                print(f"{e}\n")
+                print('The default values will be used instead.')
                 input('Press enter to continue...')
                 file_is_valid = True
+        else:
+            print("pathvalidate not installed; skipping file validation.")
+            input('Press enter to continue...')
+            file_is_valid = True
 
-            if file_is_valid:
-                script_dir = os.path.dirname(os.path.abspath(__file__))
-                config_dir = os.path.join(script_dir, dir_name)
-                os.makedirs(config_dir, exist_ok=True)  # make the folder if it doesn't exist
-                file_path = os.path.join(config_dir, file_name)
+        if file_is_valid:
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            config_dir = os.path.join(script_dir, dir_name)
+            os.makedirs(config_dir, exist_ok=True)  # make the folder if it doesn't exist
+            file_path = os.path.join(config_dir, file_name)
 
+            try: 
                 with open(file_path, 'r', encoding="utf-8") as file:
                     config = json.load(file)
                     config["extended_color_cache"] = collections.OrderedDict()
@@ -1264,11 +1262,11 @@ def get_config(file_name=CONFIG_FILE, dir_name=CONFIG_DIR_NAME):
                     hide_or_show_cursor(hide=True)
                     return config
 
-    except FileNotFoundError:
-        print(f'''The file "{file_name}" wasn't found.''')
-        print('The default values will be used instead.')
-        input('Press enter to continue...')
-    hide_or_show_cursor(hide=True)
+            except FileNotFoundError:
+                print(f'''The file "{file_name}" wasn't found.''')
+                print('The default values will be used instead.')
+                input('Press enter to continue...')
+            hide_or_show_cursor(hide=True)
 
     controls = {
         "speed_up": "f",
@@ -1330,15 +1328,15 @@ def get_config(file_name=CONFIG_FILE, dir_name=CONFIG_DIR_NAME):
         "visibility_priority": 'higher',
         "characters": "ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍｦｲｸｺｿﾁﾄﾉﾌﾤﾨﾛﾝ012345789:.=*+-<>",
         "colors": (
-            "\u001b[0m",              # White: Reset color (default terminal color)
-            "\u001b[38;2;0;255;0m",   # Brightest green
-            "\u001b[38;2;0;208;0m",   # Brighter green
-            "\u001b[38;2;0;176;0m",   # Bright green
-            "\u001b[38;2;0;144;0m",   # Medium green
-            "\u001b[38;2;0;112;0m",   # Slightly dark green
-            "\u001b[38;2;0;80;0m",    # Dark green
-            "\u001b[38;2;0;48;0m",    # Darker green
-            "\u001b[38;2;0;24;0m"     # Very dark green
+            "\u001b[38;2;255;255;255m",  # White: Reset color (default terminal color)
+            "\u001b[38;2;0;255;0m",      # Brightest green
+            "\u001b[38;2;0;208;0m",      # Brighter green
+            "\u001b[38;2;0;176;0m",      # Bright green
+            "\u001b[38;2;0;144;0m",      # Medium green
+            "\u001b[38;2;0;112;0m",      # Slightly dark green
+            "\u001b[38;2;0;80;0m",       # Dark green
+            "\u001b[38;2;0;48;0m",       # Darker green
+            "\u001b[38;2;0;24;0m"        # Very dark green
         ),
         "custom_colors": {},
         'background_brightness_reduction': [0.6],
