@@ -5,6 +5,8 @@ A customizable terminal-based simulation of the iconic "Matrix rain" effect, wri
 ## Example of one configuration
 
 ![Demo GIF](images/demo.gif)
+![Demo GIF](images/demo1.gif)
+![Demo GIF](images/demo2.gif)
 This is only 1 example. You can make custom colors, change the characters, difference in speeds, background and much more.
 ## Installation
 
