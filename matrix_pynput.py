@@ -8,24 +8,23 @@ except ImportError:
     PYNPUT_AVAILABLE = False
 
 # if you saved your config in a file you can load it by putting the file name here
-# if you want to use the global variables, keep this variable as an emtpy string
+# if you want to use the default values, keep this variable as an emtpy string
 CONFIG_FILE = 'base_config_pynput'
+
 CONFIG_DIR_NAME = 'config_pynput'
 
 
 # ______________________make_canonical______________________
 def make_canonical(key, listener):
     """
-    Return the canonical key event using the listener's canonical() method.
-
-    If the type of the canonical key matches the original, return it; otherwise, return the original.
+    Convert a key event to its canonical form using the listener's canonical() method.
 
     Args:
-        key: A key event (from pynput).
-        listener: A listener with a canonical() method.
+        key: A key event from pynput.
+        listener: A pynput listener object that provides a canonical() method.
 
     Returns:
-        A key event: either the canonical version or the original.
+        The canonical key event if the types match; otherwise, returns the original key.
     """
     canonical_key = listener.canonical(key)
     # some keys get their names changed to None and change their type (for example esc, tab...), so we return the original
@@ -41,10 +40,10 @@ def key_to_str(key):
     Convert a key event to its lowercase string representation.
 
     Args:
-        key: A key event (from pynput or similar).
+        key: A key event from pynput (can be a Key or KeyCode).
 
     Returns:
-        str: Lowercase string representation of the key.
+        str: The lowercase string representation of the key.
     """
     # For KeyCode (i.e. regular letter/number keys), return the character in lowercase.
     if hasattr(key, 'char') and key.char is not None:
@@ -60,12 +59,14 @@ def key_to_str(key):
 # ______________________on_press______________________
 def on_press(key, currently_pressed: set, lock):
     """
-    Callback for key press events.
+    Callback function for key press events.
+
+    When a key is pressed, its string representation is added to the currently_pressed set.
 
     Args:
         key: The key event.
-        currently_pressed (set): Set of currently pressed keys.
-        lock (threading.Lock): Lock for thread-safe access.
+        currently_pressed (set): Set to store currently pressed keys.
+        lock: A threading.Lock object for thread-safe access.
     """
     with lock:
         currently_pressed.add(key_to_str(key))
@@ -74,12 +75,14 @@ def on_press(key, currently_pressed: set, lock):
 # ______________________on_release______________________
 def on_release(key, currently_pressed: set, lock):
     """
-    Callback for key release events.
+    Callback function for key release events.
+
+    When a key is released, its string representation is removed from the currently_pressed set.
 
     Args:
         key: The key event.
-        currently_pressed (set): Set of currently pressed keys.
-        lock (threading.Lock): Lock for thread-safe access.
+        currently_pressed (set): Set containing keys that are currently pressed.
+        lock: A threading.Lock object for thread-safe access.
     """
     with lock:
         currently_pressed.discard(key_to_str(key))
@@ -87,6 +90,19 @@ def on_release(key, currently_pressed: set, lock):
 
 # ______________________update_pressed_keys______________________
 def update_pressed_keys(currently_pressed, lock):
+    """
+    Set up the pynput keyboard listener to update the set of currently pressed keys.
+
+    This function starts a pynput keyboard listener that calls the on_press and on_release callbacks
+    to maintain an updated set of pressed keys.
+
+    Args:
+        currently_pressed (set): Set to store currently pressed keys.
+        lock: A threading.Lock object for thread-safe access.
+
+    Returns:
+        None
+    """
     if PYNPUT_AVAILABLE:
         listener = keyboard.Listener(
             on_press=lambda key: on_press(make_canonical(key, listener), currently_pressed, lock),
@@ -102,6 +118,18 @@ def update_pressed_keys(currently_pressed, lock):
 
 # ______________________change_controls______________________
 def change_controls(config: dict):
+    """
+    Interactive function to modify the control key mappings.
+
+    This function prompts the user to view, change, or save control mappings for the Matrix rain animation.
+    It allows capturing new key combinations via the pynput listener and updating the configuration accordingly.
+
+    Args:
+        config (dict): Configuration dictionary containing current control mappings.
+
+    Returns:
+        None
+    """
     flush_stdin()
     print()
     new_controls = dict()
@@ -240,6 +268,15 @@ def change_controls(config: dict):
 
 # ______________________run_pynput_matrix______________________
 def run_pynput_matrix():
+    """
+    Initialize and run the Matrix rain animation using the pynput library for keyboard input.
+
+    This function loads the configuration, sets up keyboard listeners with pynput, and starts the
+    main Matrix animation loop.
+
+    Returns:
+        None
+    """
     config = get_config(file_name=CONFIG_FILE, dir_name=CONFIG_DIR_NAME)
     run_matrix(update_pressed_keys, change_controls, config)
 

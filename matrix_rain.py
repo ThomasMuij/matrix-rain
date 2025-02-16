@@ -13,94 +13,24 @@ except ImportError:
     PATHVALIDATE_AVAILABLE = False
 
 # if you saved your config in a file you can load it by putting the file name here
-# if you want to use the global variables, keep this variable as an emtpy string
+# if you want to use the default values, keep this variable as an emtpy string
 CONFIG_FILE = ''
+
 CONFIG_DIR_NAME = 'config'
-
-
-# Global constants (control keys, rows, columns, etc.) remain unchanged.
-NEW_SEQUENCE_CHANCE = 0.018
-RANDOM_CHAR_CHANGE_CHANCE = 0.01
-TIME_BETWEEN_FRAMES = 0.045
-
-MIN_SEQUENCE_LENGTH = 3
-MAX_SEQUENCE_LENGTH = 20
-
-# 1/sequence_speed = frames to move the sequence; sequence_speed has a range from MIN_SEQUENCE_SPEED to MAX_SEQUENCE_SPEED
-MIN_SEQUENCE_SPEED = 0.2
-MAX_SEQUENCE_SPEED = 0.8
-
-AMOUNT_OF_COLUMNS = 140
-AMOUNT_OF_ROWS = 20
-
-SPACE_BETWEEN_COLUMNS = True
-MODE = True  # If True, the first letter of a sequence is random and the rest follow; otherwise the sequence remains unchanged.
-AUTO_SIZE = True
-VISIBILITY_PRIORITY = 'higher'
-
-CHARACTERS = "ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍｦｲｸｺｿﾁﾄﾉﾌﾤﾨﾛﾝ012345789:.=*+-<>"
-
-BACKGROUND_BRIGHTNESS_REDUCTION = [0.6]
-BACKGROUND_CHANCE = 0.5
-
-# Green gradient colors (8 shades, from brightest to darkest)
-COLORS = (
-    "\u001b[0m",              # White: Reset color (default terminal color)
-    "\u001b[38;2;0;255;0m",   # Brightest green
-    "\u001b[38;2;0;208;0m",   # Brighter green
-    "\u001b[38;2;0;176;0m",   # Bright green
-    "\u001b[38;2;0;144;0m",   # Medium green
-    "\u001b[38;2;0;112;0m",   # Slightly dark green
-    "\u001b[38;2;0;80;0m",    # Dark green
-    "\u001b[38;2;0;48;0m",    # Darker green
-    "\u001b[38;2;0;24;0m"     # Very dark green
-)
-
-
-# Control key assignments:
-CONTROLS = {
-        "speed_up": "f",
-        "slow_down": "s",
-        "change_speed_diff": "d",
-        "pause": "p",
-        "mode_char": "q",
-        "auto_size_char": "a",
-        "make_space_between_columns": "shift space",
-        "change_visibility_priority": "v",
-        "more_random_char": "shift up",
-        "less_random_char": "shift down",
-        "less_rows": "up",
-        "more_rows": "down",
-        "less_columns": "left",
-        "more_columns": "right",
-        "more_new_sequence_chance": "shift =",
-        "less_new_sequence_chance": "-",
-        "first_bold": "b shift",
-        "first_white": "w",
-        "first_bright": "w shift",
-        "blue": "b",
-        "green": "g",
-        "red": "r",
-        "change_background_brightness": "8",
-        "create_color": "9",
-        "change_seq_length": "l",
-        "chars_01": "0",
-        "chars_original": "1",
-        "set_any_chars": "2",
-        "change_controls": "shift c",
-        "show_help_message": "h",
-        "cur_values": "shift h",
-        "save_config": "s shift",
-        "load_config": "l shift",
-        "disable_controls": "shift backspace",
-        "enable_controls": "ctrl shift enter",
-        "check_if_pressed": "shift ctrl"
-    }
 
 
 # ______________________hide_or_show_cursor______________________
 def hide_or_show_cursor(hide=False, show=False):
-    """Hide or show the terminal cursor."""
+    """
+    Toggle the visibility of the terminal cursor.
+
+    Args:
+        hide (bool): If True, hide the terminal cursor.
+        show (bool): If True, show the terminal cursor.
+
+    Note:
+        Only one of `hide` or `show` should be True at a time.
+    """
     if hide:
         sys.stdout.write("\u001b[?25l")
         sys.stdout.flush()
@@ -111,7 +41,11 @@ def hide_or_show_cursor(hide=False, show=False):
 
 # ______________________flush_stdin______________________
 def flush_stdin():
-    """Flush the standard input buffer to remove any pending keyboard input."""
+    """
+    Flush the standard input buffer, discarding any pending input.
+
+    This is useful before prompting the user to ensure no unintended keystrokes are processed.
+    """
     if os.name == 'nt':
         import msvcrt
         while msvcrt.kbhit():
@@ -124,13 +58,14 @@ def flush_stdin():
 # ______________________parse_ansi_color______________________
 def parse_ansi_color(ansi: str):
     """
-    Parse an ANSI escape code representing a color.
+    Parse an ANSI escape code and extract its RGB color and boldness flag.
 
     Args:
         ansi (str): ANSI escape code string (e.g., "\u001b[38;2;R;G;Bm").
 
     Returns:
-        tuple: A tuple ( (R, G, B), is_bold ) where R, G, B are integers and is_bold is a bool.
+        tuple: A tuple containing a tuple of RGB values (R, G, B) as integers and a boolean
+               indicating if the text is bold.
     """
     is_bold = False
     if ansi == "\u001b[0m":
@@ -149,21 +84,24 @@ def parse_ansi_color(ansi: str):
 
 
 # ______________________extend_colors______________________
-def extend_colors(original_colors: tuple, new_length: int, config: dict):
+def extend_colors(default_colors: tuple, new_length: int, config: dict):
     """
-    Generate an extended color gradient of a specified length by linearly interpolating between the given colors.
-    Utilizes caching stored in config["extended_color_cache"] to avoid redundant computations.
+    Generate an extended gradient of ANSI color codes by interpolating between given colors.
+
+    This function interpolates between the colors provided in `default_colors` to create
+    a gradient with `new_length` colors. It caches results in the configuration's 
+    "extended_color_cache" to avoid redundant calculations.
 
     Args:
-        original_colors (list or tuple): Sequence of ANSI color escape codes.
-        new_length (int): Desired number of colors in the extended gradient.
-        config (dict): Configuration dictionary containing the extended_color_cache.
+        default_colors (tuple): A tuple of ANSI escape codes representing colors.
+        new_length (int): The desired number of colors in the extended gradient.
+        config (dict): Configuration dictionary that includes caching information.
 
     Returns:
-        list: List of ANSI color escape codes representing the extended gradient.
+        list: A list of ANSI escape codes representing the extended color gradient.
     """
     max_cache_size = 250
-    key = (tuple(original_colors), new_length)
+    key = (tuple(default_colors), new_length)
     cache = config["extended_color_cache"]
 
     if key in cache:
@@ -172,25 +110,25 @@ def extend_colors(original_colors: tuple, new_length: int, config: dict):
         return cache[key]
 
     if new_length <= 1:
-        cache[key] = original_colors
+        cache[key] = default_colors
         cache.move_to_end(key)
         if len(cache) > max_cache_size:
             cache.popitem(last=False)
-        return original_colors
+        return default_colors
 
     extended = []
-    n = len(original_colors)
+    n = len(default_colors)
     for i in range(new_length):
         t = i / (new_length - 1)  # relative position in the new color list
-        pos = t * (n - 1)  # find index(float) in original colors that's at the same relative position as in the new one
+        pos = t * (n - 1)  # find index(float) in default colors that's at the same relative position as in the new one
         idx = int(pos)
         # Fractional distance between idx and the next color, used for interpolation (ranges from 0 to 1).
         # If idx is the last color, set t2 to 1.0 to avoid out-of-bounds errors.
         t2 = pos - idx if idx < n - 1 else 1.0
         # find the r, g, b components of the first color with a smaller index
-        rgb1, is_bold1 = parse_ansi_color(original_colors[idx])
+        rgb1, is_bold1 = parse_ansi_color(default_colors[idx])
         # find the next color, if we are the end of the list take the last one itself
-        rgb2, is_bold2 = parse_ansi_color(original_colors[min(idx + 1, n - 1)])
+        rgb2, is_bold2 = parse_ansi_color(default_colors[min(idx + 1, n - 1)])
         # find the weighted average between the 2 colors based on the distance from the first one:
         r = int(round(rgb1[0] * (1 - t2) + rgb2[0] * t2))
         g = int(round(rgb1[1] * (1 - t2) + rgb2[1] * t2))
@@ -210,14 +148,22 @@ def extend_colors(original_colors: tuple, new_length: int, config: dict):
 # ______________________make_sequence______________________
 def make_sequence(config: dict):
     """
-    Create a new falling sequence for a column.
+    Create a new falling character sequence for a column.
+
+    A sequence consists of a list of random characters, a speed, and color information.
+    The sequence length, speed, and characters are determined based on the provided configuration.
 
     Args:
-        config (dict): Configuration settings.
+        config (dict): Configuration dictionary containing parameters such as sequence length,
+                       speed, characters, and colors.
 
     Returns:
-        dict: A dictionary representing a sequence with keys: 'chars', 'final_char',
-              'speed', 'colors', and 'colors_extended'.
+        dict: A dictionary representing a sequence with keys:
+              - 'chars': list of characters,
+              - 'final_char': current bottom position (as float),
+              - 'speed': falling speed,
+              - 'colors': base color tuple,
+              - 'colors_extended': extended color gradient (initially empty).
     """
     seq_length = random.randint(config["min_sequence_length"], config["max_sequence_length"])
     if random.random() > config['background_chance']:
@@ -234,14 +180,17 @@ def make_sequence(config: dict):
 # ______________________columns_to_rows______________________
 def columns_to_rows(columns: list, config: dict):
     """
-    Convert column sequences into a list of strings representing rows for terminal display.
+    Convert column sequences into a list of strings representing terminal rows.
+
+    This function iterates over each row and column to build a string for display,
+    taking into account sequence positions, visibility, spacing between columns, and color gradients.
 
     Args:
-        columns (list): List of columns, each containing sequences.
-        config (dict): Configuration dictionary.
+        columns (list): List of columns, where each column is a list of sequences.
+        config (dict): Configuration dictionary containing display settings.
 
     Returns:
-        list: List of strings for each terminal row.
+        list: A list of strings, each representing a row to be displayed in the terminal.
     """
     rows = []
     for row_index in range(config["amount_of_rows"]):
@@ -309,14 +258,17 @@ def columns_to_rows(columns: list, config: dict):
 # ______________________update_column______________________
 def update_column(column: list, config: dict):
     """
-    Update all sequences in a single column.
+    Update the falling sequences within a single column.
+
+    Each sequence's position is advanced based on its speed. Sequences that move completely
+    off the display are removed. New sequences may be added based on a random chance.
 
     Args:
-        column (list): List of sequences in the column.
-        config (dict): Configuration dictionary.
+        column (list): A list of sequence dictionaries in a column.
+        config (dict): Configuration dictionary with parameters for sequence behavior.
 
     Returns:
-        list: Updated list of sequences for the column.
+        list: The updated list of sequences for the column.
     """
     new_column = []
     if len(column) == 0:  # if the column is empty, create a new sequence with some probability
@@ -362,15 +314,20 @@ def update_column(column: list, config: dict):
 # ______________________update_columns______________________
 def update_columns(columns: list, config: dict, clear: bool):
     """
-    Update the list of columns, adjusting for changes in the number of columns and updating each column.
+    Update all columns and adjust the number of columns based on the configuration.
+
+    This function updates each column's sequences and adds or removes columns if the configuration
+    for the number of columns has changed. It also determines whether a full screen clear is required.
 
     Args:
-        columns (list): Current columns (list of sequence lists).
-        config (dict): Configuration dictionary.
-        clear (bool): Flag indicating whether a full screen clear is needed.
+        columns (list): List of columns (each a list of sequences).
+        config (dict): Configuration dictionary with display and sequence settings.
+        clear (bool): Flag indicating whether the display should be cleared.
 
     Returns:
-        tuple: (new_columns, clear) where new_columns is the updated columns list.
+        tuple: A tuple (new_columns, clear) where:
+               - new_columns is the updated list of columns,
+               - clear is a boolean indicating if a screen clear is needed.
     """
     # remove or add columns if config["amount_of_columns"] changed
     if len(columns) > config["amount_of_columns"]:
@@ -395,11 +352,14 @@ def update_columns(columns: list, config: dict, clear: bool):
 # ______________________update_sequence_and_background_colors______________________
 def update_sequence_and_background_colors(config: dict, columns: list):
     """
-    Update sequence and background colors based on the current configuration.
+    Update the colors of sequences and background based on the current configuration.
+
+    This function recalculates background colors by reducing brightness and applies changes to
+    existing sequences, updating their extended color gradients if necessary.
 
     Args:
-        config (dict): Configuration dictionary.
-        columns (list): List of columns containing sequences.
+        config (dict): Configuration dictionary containing color settings.
+        columns (list): List of columns with sequences to update.
 
     Returns:
         None
@@ -442,16 +402,19 @@ def update_sequence_and_background_colors(config: dict, columns: list):
 # ______________________keys_are_pressed______________________
 def keys_are_pressed(currently_pressed: set, lock, config: dict, keys):
     """
-    Check if the specified keys are currently pressed, while avoiding interference from other keys.
+    Check if the specified keys are currently pressed.
+
+    This function verifies that all keys in the provided `keys` list are pressed, while ensuring
+    that no interfering keys (as defined in the configuration under 'check_if_pressed') are active.
 
     Args:
         currently_pressed (set): Set of keys currently pressed.
-        lock (threading.Lock): Lock for thread-safe access.
-        config (dict): Configuration dictionary (contains control keys).
-        keys (list or str): Required key or list of keys.
+        lock: A threading.Lock instance for thread-safe access.
+        config (dict): Configuration dictionary containing control key settings.
+        keys (list or str): The key or list of keys to check for.
 
     Returns:
-        bool: True if all required keys are pressed and no interfering key (per 'check_if_pressed') is active.
+        bool: True if all required keys are pressed and no interfering keys are active; False otherwise.
     """
     with lock:
         # prevents accidentally using multiple controls that share keys
@@ -468,24 +431,26 @@ def keys_are_pressed(currently_pressed: set, lock, config: dict, keys):
 # ______________________check_keys______________________
 def check_keys(currently_pressed: set, lock, count: list, columns: list, config: dict, change_controls: callable):
     """
-    Process keyboard input to update configuration and columns based on key presses.
+    Process keyboard input and update configuration and sequences accordingly.
 
-    This function handles actions such as speeding up, pausing, changing colors,
-    saving/loading configuration, and even changing controls.
+    This function handles various keyboard commands to control aspects such as speed, color, sequence
+    length, and more. It returns updated timing counters, column states, and flags indicating whether
+    a screen clear or color update is needed.
 
     Args:
         currently_pressed (set): Set of keys currently pressed.
-        lock (threading.Lock): Lock for thread-safe access.
-        count (list): List of timestamps used for debouncing.
-        columns (list): List of columns (each a list of sequences).
-        config (dict): Configuration dictionary.
+        lock: A threading.Lock instance for thread-safe access.
+        count (list): List of timestamp counters for debouncing key presses.
+        columns (list): List of columns containing sequences.
+        config (dict): Configuration dictionary with various settings.
+        change_controls (callable): Function to change control key mappings. (requires "config" as a parameter)
 
     Returns:
-        tuple: (count, columns, clear, update_colors) where:
-            - count: Updated debounce timestamps.
-            - columns: Updated columns.
-            - clear (bool): Whether the screen should be cleared.
-            - update_colors (bool): Whether a color update is needed.
+        tuple: A tuple (count, columns, clear, update_colors) where:
+               - count: Updated debounce timestamp list.
+               - columns: Updated columns list.
+               - clear (bool): Flag indicating if the screen should be cleared.
+               - update_colors (bool): Flag indicating if color updates are required.
     """
     cur_time = time.time()
     time_passed = [cur_time - t for t in count]
@@ -729,7 +694,7 @@ def check_keys(currently_pressed: set, lock, count: list, columns: list, config:
 
     # first bright
     if keys_are_pressed(currently_pressed, lock, config, config['controls']['first_bright']):
-        # this works only on the original colors
+        # this doesn't work on custom colors
         colors = list(config["colors"])
         first_color, is_bold = parse_ansi_color(colors[1])
         r, g, b = first_color
@@ -973,7 +938,7 @@ def check_keys(currently_pressed: set, lock, count: list, columns: list, config:
         config["characters"] = '01'
 
     # chars orig
-    if keys_are_pressed(currently_pressed, lock, config, config['controls']['chars_original']):
+    if keys_are_pressed(currently_pressed, lock, config, config['controls']['chars_default']):
         config["characters"] = "ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍｦｲｸｺｿﾁﾄﾉﾌﾤﾨﾛﾝ012345789:.=*+-<>"
 
     # chars any
@@ -1142,7 +1107,7 @@ background_colors = {config["background_colors"]}
     {', '.join(config['controls']['change_background_brightness'])} = create a background by making some sequences less bright
 
     {', '.join(config['controls']['chars_01'])} = change characters to "01"
-    {', '.join(config['controls']['chars_original'])} = reset characters to original set
+    {', '.join(config['controls']['chars_default'])} = reset characters to default set
     {', '.join(config['controls']['set_any_chars'])} = prompt for input to add or replace characters
 
     {', '.join(config['controls']['save_config'])} = save current values and controls (rows, color...)
@@ -1168,13 +1133,19 @@ background_colors = {config["background_colors"]}
 # ______________________clear_if_necessary______________________
 def clear_if_necessary(clear: bool, config: dict, terminal_size=None, old_terminal_size=None):
     """
-    Clear the terminal screen if necessary.
+    Clear the terminal screen if conditions indicate that a refresh is needed.
+
+    The screen will be cleared if a change in terminal size is detected or if the current number
+    of rows exceeds the terminal dimensions.
 
     Args:
-        clear (bool): Flag indicating whether clearing is requested.
-        config (dict): Configuration dictionary.
+        clear (bool): Initial flag indicating if a clear has been requested.
+        config (dict): Configuration dictionary containing display settings.
         terminal_size (os.terminal_size, optional): Current terminal size.
         old_terminal_size (os.terminal_size, optional): Previous terminal size.
+
+    Returns:
+        None
     """
     if not (terminal_size and old_terminal_size):
         return
@@ -1184,6 +1155,7 @@ def clear_if_necessary(clear: bool, config: dict, terminal_size=None, old_termin
 
     # if the rows reach below the terminal size, keep clearing
     # if this didn't happen, it would result in the terminal having all previous frames
+    # the multiplication ensures that when there are too many columns the terminal will also be cleared because they increase the amount of rows
     if terminal_size.lines <= config["amount_of_rows"] * (1 + (config["amount_of_columns"] - 1)//terminal_size.columns):
         clear = True
 
@@ -1194,11 +1166,17 @@ def clear_if_necessary(clear: bool, config: dict, terminal_size=None, old_termin
 # ______________________adjust_size______________________
 def adjust_size(config: dict, terminal_size=None):
     """
-    Adjust configuration parameters based on the terminal size.
+    Adjust the configuration's row and column settings based on the terminal size.
+
+    This function sets the number of rows to the terminal's line count minus one (to avoid constant clearing)
+    and sets the number of columns to the terminal's column count.
 
     Args:
         config (dict): Configuration dictionary.
         terminal_size (os.terminal_size, optional): Current terminal size.
+
+    Returns:
+        None
     """
     if terminal_size:
         # - 1 ensures that constant clearing doesn't happen and that typing into the terminal doesn't cause issues by moving it
@@ -1209,14 +1187,18 @@ def adjust_size(config: dict, terminal_size=None):
 # ______________________get_config______________________
 def get_config(file_name=CONFIG_FILE, dir_name=CONFIG_DIR_NAME):
     """
-    Load configuration from a JSON file, or return the default configuration if not found.
+    Load the configuration from a JSON file, or return the default configuration if the file is not found.
+
+    The function validates the folder and file names if the pathvalidate module is available.
+    If the file is found and valid, its contents are loaded and merged into the configuration; otherwise,
+    default configuration settings are used.
 
     Args:
-        file_name (str): Name of the configuration file.
-        dir_name (str): Directory where configuration files are stored.
+        file_name (str): Name of the configuration file (without path).
+        dir_name (str): Name of the directory where configuration files are stored.
 
     Returns:
-        dict: Configuration dictionary.
+        dict: A configuration dictionary with settings for the Matrix rain animation.
     """
     hide_or_show_cursor(show=True)
     if PATHVALIDATE_AVAILABLE:
@@ -1227,7 +1209,7 @@ def get_config(file_name=CONFIG_FILE, dir_name=CONFIG_DIR_NAME):
             folder_is_valid = False
             print(f'''\nThe folder "{dir_name}" isn't valid. Reason:''')
             print(f"{e}\n")
-            print('The global variables will be used instead.')
+            print('The default values will be used instead.')
             input('Press enter to continue...')
     else:
         print("pathvalidate not installed; skipping folder validation.")
@@ -1246,7 +1228,7 @@ def get_config(file_name=CONFIG_FILE, dir_name=CONFIG_DIR_NAME):
                 except pathvalidate.ValidationError as e:
                     print("The file you have chosen isn't valid.")
                     print(f"{e}\n")
-                    print('The global variables will be used instead.')
+                    print('The default values will be used instead.')
                     input('Press enter to continue...')
                     file_is_valid = True
             else:
@@ -1284,7 +1266,7 @@ def get_config(file_name=CONFIG_FILE, dir_name=CONFIG_DIR_NAME):
 
     except FileNotFoundError:
         print(f'''The file "{file_name}" wasn't found.''')
-        print('The global variables will be used instead.')
+        print('The default values will be used instead.')
         input('Press enter to continue...')
     hide_or_show_cursor(hide=True)
 
@@ -1315,7 +1297,7 @@ def get_config(file_name=CONFIG_FILE, dir_name=CONFIG_DIR_NAME):
         "create_color": "9",
         "change_seq_length": "l",
         "chars_01": "0",
-        "chars_original": "1",
+        "chars_default": "1",
         "set_any_chars": "2",
         "change_controls": "shift c",
         "show_help_message": "h",
@@ -1376,10 +1358,18 @@ def save_config(config: dict, update=False, dir_name=None):
     """
     Save the current configuration to a JSON file.
 
+    If `update` is True, the existing configuration file is overwritten; otherwise, a new file is created.
+    The function performs validation on the folder and file names if possible, and excludes transient data
+    (such as caches) from being saved.
+
     Args:
-        config (dict): Configuration dictionary.
-        update (bool): If True, update the existing file; otherwise, create a new file.
-        dir_name (str): Directory to save the configuration file.
+        config (dict): The configuration dictionary to save.
+        update (bool): Whether to update an existing configuration file (True) or create a new one (False).
+        dir_name (str, optional): The directory to save the configuration file in. If None, uses the directory
+                                  specified in the config.
+
+    Returns:
+        None
     """
     if dir_name is None:
         dir_name = config['dir_name']
@@ -1480,7 +1470,7 @@ def save_config(config: dict, update=False, dir_name=None):
 
                 if new_name in file_names:
                     print(f'\n{new_name} already exists.')
-                    print('You can save to this file but that will cause the original data on this file to be erased.')
+                    print('You can save to this file but that will cause the current data on this file to be erased.')
                     print('Do you want to save to this file anyway?')
                     save_anyway = input('> ').lower().strip()
                     if save_anyway in ['y', 'yes']:
@@ -1501,9 +1491,17 @@ def run_matrix(update_pressed_keys: callable, change_controls: callable, config=
     """
     Run the Matrix rain animation in the terminal.
 
-    Loads configuration (from file or defaults), initializes the display columns,
-    sets up keyboard listeners (if available), and enters a loop to update and render
-    the animation until interrupted.
+    This function loads the configuration, initializes the columns for the animation,
+    sets up keyboard input handling, and enters the main animation loop. The animation
+    can be controlled via various keyboard commands.
+
+    Args:
+        update_pressed_keys (callable): Function to update the set of currently pressed keys. (requires "currently_pressed, lock" as parameters)
+        change_controls (callable): Function to change keyboard control mappings. (requires "config" as a parameter)
+        config (dict, optional): Configuration dictionary. If None, the configuration is loaded via get_config().
+
+    Returns:
+        None
     """
     try:
         if config is None:
@@ -1560,7 +1558,7 @@ def run_matrix(update_pressed_keys: callable, change_controls: callable, config=
                     config['controls_activated'] = True
 
                 remaining = end_time - time.time()
-                time.sleep(min(0.005, max(remaining, 0)))
+                time.sleep(min(0.008, max(remaining, 0.001)))
                 if time.time() > end_time:
                     break
 
@@ -1580,6 +1578,7 @@ def run_matrix(update_pressed_keys: callable, change_controls: callable, config=
 
 
 def filler_func(*args, **kwargs):
+    """This function is used when no keyboard input is necessary."""
     pass
 
 

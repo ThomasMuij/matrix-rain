@@ -26,7 +26,7 @@
         "create_color": "9",
         "change_seq_length": "l",
         "chars_01": "0",
-        "chars_original": "1",
+        "chars_default": "1",
         "set_any_chars": "2",
         "change_controls": "shift C",
         "show_help_message": "h",

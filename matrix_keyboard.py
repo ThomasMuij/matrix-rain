@@ -7,24 +7,31 @@ except ImportError:
     KEYBOARD_AVAILABLE = False
 
 # if you saved your config in a file you can load it by putting the file name here
-# if you want to use the global variables, keep this variable as an emtpy string
+# if you want to use the default values, keep this variable as an emtpy string
 CONFIG_FILE = 'base_config_keyboard'
+
 CONFIG_DIR_NAME = 'config_keyboard'
 
 
 # ______________________on_key_event______________________
 def on_key_event(currently_pressed: set, event, lock):
     """
-    Callback function to handle keyboard events and update the set of currently pressed keys.
+    Handle keyboard events to update the set of currently pressed keys.
+
+    Depending on the event type ('down' or 'up'), the function adds or removes the key from
+    the currently_pressed set in a thread-safe manner.
 
     Args:
-        currently_pressed (set): A set containing the names of keys currently pressed.
-        event: Keyboard event object.
-        lock (threading.Lock): Lock object to ensure thread-safe updates.
+        currently_pressed (set): Set of keys currently pressed.
+        event: An event object from the keyboard library.
+        lock: A threading.Lock object for thread-safe access.
 
     Returns:
         None
     """
+    # the up event does't necessarily have to be the same as the down event.
+    # shift -> modified key on press
+    # release shift -> unmodified key on release
     with lock:
         if event.event_type == 'down':
             currently_pressed.add(event.name)
@@ -35,6 +42,18 @@ def on_key_event(currently_pressed: set, event, lock):
 
 # ______________________update_pressed_keys______________________
 def update_pressed_keys(currently_pressed, lock):
+    """
+    Register a global keyboard hook using the keyboard library to track pressed keys.
+
+    This function hooks into keyboard events and updates the currently_pressed set accordingly.
+
+    Args:
+        currently_pressed (set): Set to store currently pressed keys.
+        lock: A threading.Lock object for thread-safe access.
+
+    Returns:
+        None
+    """
     if KEYBOARD_AVAILABLE:
         keyboard.hook(lambda event: on_key_event(currently_pressed, event, lock))
     else:
@@ -46,6 +65,18 @@ def update_pressed_keys(currently_pressed, lock):
 
 # ______________________change_controls______________________
 def change_controls(config: dict):
+    """
+    Interactive function to modify keyboard control mappings.
+
+    This function allows the user to view current control mappings, modify them by entering new key combinations,
+    and optionally save the changes to the configuration.
+
+    Args:
+        config (dict): Configuration dictionary containing current control mappings.
+
+    Returns:
+        None
+    """
     flush_stdin()
     print()
     new_controls = dict()
@@ -131,6 +162,15 @@ def change_controls(config: dict):
 
 # ______________________run_keyboard_matrix______________________
 def run_keyboard_matrix():
+    """
+    Initialize and run the Matrix rain animation using the keyboard library for keyboard input.
+
+    This function loads the configuration, sets up a keyboard hook to track key presses,
+    and starts the main Matrix animation loop.
+
+    Returns:
+        None
+    """
     config = get_config(file_name=CONFIG_FILE, dir_name=CONFIG_DIR_NAME)
     run_matrix(update_pressed_keys, change_controls, config)
 
