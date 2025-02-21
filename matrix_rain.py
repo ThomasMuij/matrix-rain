@@ -83,7 +83,7 @@ def extend_colors(original_colors: tuple, new_length: int, config: dict):
     Generate an extended gradient of ANSI color codes by interpolating between given colors.
 
     This function interpolates between the colors provided in `original_colors` to create
-    a gradient with `new_length` colors. It caches results in the configuration's 
+    a gradient with `new_length` colors. It caches results in the configuration's
     "extended_color_cache" to avoid redundant calculations.
 
     Args:
@@ -894,7 +894,7 @@ def check_keys(currently_pressed: set, lock, count: list, columns: list, config:
                 else:
                     config['background_brightness_reduction'] = old_values
                     break
-            
+
             try:
                 reduction_rate = float(reduction_rate)
             except ValueError:
@@ -917,7 +917,7 @@ def check_keys(currently_pressed: set, lock, count: list, columns: list, config:
                 background_chance = float(input('> '))
             except ValueError:
                 print('Background chance has to be a number.')
-                continue                    
+                continue
             if not 0 <= background_chance <= 1:
                 print('Background chance has to be from 0 to 1.')
                 continue
@@ -1239,7 +1239,7 @@ def get_config(file_name=CONFIG_FILE, dir_name=CONFIG_DIR_NAME):
             os.makedirs(config_dir, exist_ok=True)  # make the folder if it doesn't exist
             file_path = os.path.join(config_dir, file_name)
 
-            try: 
+            try:
                 with open(file_path, 'r', encoding="utf-8") as file:
                     config = json.load(file)
                     config["extended_color_cache"] = collections.OrderedDict()
