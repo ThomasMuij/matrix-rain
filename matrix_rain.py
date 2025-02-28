@@ -1037,7 +1037,7 @@ def check_keys(currently_pressed: set, lock, count: list, columns: list, config:
 new_sequence_chance = {round(config["new_sequence_chance"], 4)} (Chance for a new sequence to start if there is space; range: 0 to 1)
 random_char_change_chance = {round(config["random_char_change_chance"], 4)} (Chance for characters to change mid-sequence)
 
-time_between_frames = {round(config["time_between_frames"], 4)} (Delay between frame updates)
+time_between_frames = {round(config["time_between_frames"], 4)} (Delay between frame updates) --> FPS = {round(1/config["time_between_frames"], 1)}
 
 min_sequence_speed = {round(config["min_sequence_speed"], 4)} (1/sequence_speed = frames to move the sequence)
 max_sequence_speed = {round(config["max_sequence_speed"], 4)} (range(speed): MIN_SEQUENCE_SPEED to MAX_SEQUENCE_SPEED)
