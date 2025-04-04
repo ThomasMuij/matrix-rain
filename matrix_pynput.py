@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-from matrix_rain import run_matrix, get_config, hide_or_show_cursor, flush_stdin
+from typing import Any
 import time
 try:
     from pynput import keyboard
     PYNPUT_AVAILABLE = True
 except ImportError:
     PYNPUT_AVAILABLE = False
+
+from modules.terminal_control_funcs import hide_or_show_cursor, flush_stdin
+from matrix_rain import run_matrix, get_config
 
 # if you saved your config in a file you can load it by putting the file name here
 # if you want to use the default values, keep this variable as an emtpy string
@@ -15,7 +18,7 @@ CONFIG_DIR_NAME = 'config_pynput'
 
 
 # ______________________make_canonical______________________
-def make_canonical(key, listener):
+def make_canonical(key: keyboard.Key | keyboard.KeyCode, listener: keyboard.Listener) -> keyboard.Key | keyboard.KeyCode:
     """
     Convert a key event to its canonical form using the listener's canonical() method.
 
@@ -28,14 +31,14 @@ def make_canonical(key, listener):
     """
     canonical_key = listener.canonical(key)
     # some keys get their names changed to None and change their type (for example esc, tab...), so we return the original
-    if type(key) is type(canonical_key):
+    if isinstance(canonical_key, type(key)):
         return canonical_key
     else:
         return key
 
 
 # ______________________key_to_str______________________
-def key_to_str(key):
+def key_to_str(key: keyboard.Key | keyboard.KeyCode) -> str:
     """
     Convert a key event to its lowercase string representation.
 
@@ -57,7 +60,7 @@ def key_to_str(key):
 
 
 # ______________________on_press______________________
-def on_press(key, currently_pressed: set, lock):
+def on_press(key: keyboard.Key | keyboard.KeyCode, currently_pressed: set[str], lock) -> None:
     """
     Callback function for key press events.
 
@@ -73,7 +76,7 @@ def on_press(key, currently_pressed: set, lock):
 
 
 # ______________________on_release______________________
-def on_release(key, currently_pressed: set, lock):
+def on_release(key: keyboard.Key | keyboard.KeyCode, currently_pressed: set[str], lock) -> None:
     """
     Callback function for key release events.
 
@@ -89,7 +92,7 @@ def on_release(key, currently_pressed: set, lock):
 
 
 # ______________________update_pressed_keys______________________
-def update_pressed_keys(currently_pressed, lock):
+def update_pressed_keys(currently_pressed: set[str], lock) -> None:
     """
     Set up the pynput keyboard listener to update the set of currently pressed keys.
 
@@ -117,7 +120,7 @@ def update_pressed_keys(currently_pressed, lock):
 
 
 # ______________________change_controls______________________
-def change_controls(config: dict):
+def change_controls(config: dict[str, Any]) -> None:
     """
     Interactive function to modify the control key mappings.
 
@@ -132,7 +135,7 @@ def change_controls(config: dict):
     """
     flush_stdin()
     print()
-    new_controls = dict()
+    new_controls: dict[str, list[str]] = {}
     hide_or_show_cursor(show=True)
     for dict_key in config['controls']:
         try:
@@ -170,18 +173,18 @@ def change_controls(config: dict):
                 continue
 
             elif command in ['listen', 'l']:
-                def listen_for_stop(key, stop_key):
+                def listen_for_stop(key: keyboard.Key | keyboard.KeyCode, stop_key: list[str]) -> False:
                     stop_key.append(key_to_str(key))
                     return False
 
                 while True:
-                    stop_key = []
+                    stop_key: list[str] = []
                     print("\nPress the key that will stop the listening.")
                     time.sleep(0.3)
                     with keyboard.Listener(on_press=lambda key: listen_for_stop(listen_stop.canonical(key) if isinstance(key, keyboard.KeyCode) else key, stop_key)) as listen_stop:
                         listen_stop.join()
 
-                    stop_key = stop_key[0]
+                    stop_key: str = stop_key[0]
                     flush_stdin()
                     print(f'\n"{stop_key}" will be used to stop listening for keys.')
                     print("again/a = choose a different key to stop")
@@ -201,10 +204,10 @@ def change_controls(config: dict):
                         break
 
                 while True:
-                    captured_keys = set()
+                    captured_keys: set[str] = set()
 
-                    def on_press_with_stop(key):
-                        key = key_to_str(key)
+                    def on_press_with_stop(key: keyboard.Key | keyboard.KeyCode):
+                        key: str = key_to_str(key)
                         if key == stop_key:
                             return False
                         captured_keys.add(key)
@@ -267,7 +270,7 @@ def change_controls(config: dict):
 
 
 # ______________________run_pynput_matrix______________________
-def run_pynput_matrix():
+def run_pynput_matrix() -> None:
     """
     Initialize and run the Matrix rain animation using the pynput library for keyboard input.
 

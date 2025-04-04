@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
-from matrix_rain import run_matrix, get_config, hide_or_show_cursor, flush_stdin
+from typing import Any
 try:
     import keyboard
     KEYBOARD_AVAILABLE = True
 except ImportError:
     KEYBOARD_AVAILABLE = False
+
+from modules.terminal_control_funcs import hide_or_show_cursor, flush_stdin
+from matrix_rain import run_matrix, get_config
 
 # if you saved your config in a file you can load it by putting the file name here
 # if you want to use the default values, keep this variable as an emtpy string
@@ -14,7 +17,7 @@ CONFIG_DIR_NAME = 'config_keyboard'
 
 
 # ______________________on_key_event______________________
-def on_key_event(currently_pressed: set, event, lock):
+def on_key_event(currently_pressed: set[str], event: keyboard.KeyboardEvent, lock) -> None:
     """
     Handle keyboard events to update the set of currently pressed keys.
 
@@ -41,7 +44,7 @@ def on_key_event(currently_pressed: set, event, lock):
 
 
 # ______________________update_pressed_keys______________________
-def update_pressed_keys(currently_pressed, lock):
+def update_pressed_keys(currently_pressed: set[str], lock) -> None:
     """
     Register a global keyboard hook using the keyboard library to track pressed keys.
 
@@ -64,7 +67,7 @@ def update_pressed_keys(currently_pressed, lock):
 
 
 # ______________________change_controls______________________
-def change_controls(config: dict):
+def change_controls(config: dict[str, Any]) -> None:
     """
     Interactive function to modify keyboard control mappings.
 
@@ -79,13 +82,14 @@ def change_controls(config: dict):
     """
     flush_stdin()
     print()
-    new_controls = dict()
+    new_controls: dict[str, list[str]] = {}
     hide_or_show_cursor(show=True)
     for dict_key in config['controls']:
         try:
             new_controls[dict_key] = config['controls'][dict_key].copy()
         except AttributeError:
             new_controls[dict_key] = config['controls'][dict_key]
+
     save = False
     print('\nYou have chosen to change your controls')
     print('\nold/o = show controls without new changes')
@@ -161,7 +165,7 @@ def change_controls(config: dict):
 
 
 # ______________________run_keyboard_matrix______________________
-def run_keyboard_matrix():
+def run_keyboard_matrix() -> None:
     """
     Initialize and run the Matrix rain animation using the keyboard library for keyboard input.
 

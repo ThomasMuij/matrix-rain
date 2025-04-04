@@ -6,11 +6,15 @@ import sys
 import json
 import collections
 import threading
+from typing import Any, Callable
 try:
     import pathvalidate
     PATHVALIDATE_AVAILABLE = True
 except ImportError:
     PATHVALIDATE_AVAILABLE = False
+
+from modules.terminal_control_funcs import hide_or_show_cursor, flush_stdin
+from modules.ansi_color_funcs import parse_ansi_color, extend_colors
 
 # if you saved your config in a file you can load it by putting the file name here
 # if you want to use the default values, keep this variable as an emtpy string
@@ -19,128 +23,8 @@ CONFIG_FILE = ''
 CONFIG_DIR_NAME = 'config'
 
 
-# ______________________hide_or_show_cursor______________________
-def hide_or_show_cursor(hide=False, show=False):
-    """
-    Toggle the visibility of the terminal cursor.
-
-    Args:
-        hide (bool): If True, hide the terminal cursor.
-        show (bool): If True, show the terminal cursor.
-
-    Note:
-        Only one of `hide` or `show` should be True at a time.
-    """
-    if hide:
-        sys.stdout.write("\u001b[?25l")
-        sys.stdout.flush()
-    elif show:
-        sys.stdout.write("\u001b[?25h")
-        sys.stdout.flush()
-
-
-# ______________________flush_stdin______________________
-def flush_stdin():
-    """
-    Flush the standard input buffer, discarding any pending input.
-
-    This is useful before prompting the user to ensure no unintended keystrokes are processed.
-    """
-    if os.name == 'nt':
-        import msvcrt
-        while msvcrt.kbhit():
-            msvcrt.getch()
-    else:
-        import termios
-        termios.tcflush(sys.stdin, termios.TCIFLUSH)
-
-
-# ______________________parse_ansi_color______________________
-def parse_ansi_color(ansi: str):
-    """
-    Parse an ANSI escape code and extract its RGB color and boldness flag.
-
-    Args:
-        ansi (str): ANSI escape code string (e.g., "\u001b[38;2;R;G;Bm").
-
-    Returns:
-        tuple: A tuple containing a tuple of RGB values (R, G, B) as integers and a boolean
-               indicating if the text is bold.
-    """
-    is_bold = False
-    parts = ansi.split('[')[1].rstrip("m").split(";")
-    if len(parts) == 6 and parts[0] in ['0', '1']:
-        if parts[0] == '1':
-            is_bold = True
-        parts.pop(0)
-    if parts[0] == "38" and parts[1] == "2" and len(parts) >= 5:
-        return (int(parts[2]), int(parts[3]), int(parts[4])), is_bold
-
-
-# ______________________extend_colors______________________
-def extend_colors(original_colors: tuple, new_length: int, config: dict):
-    """
-    Generate an extended gradient of ANSI color codes by interpolating between given colors.
-
-    This function interpolates between the colors provided in `original_colors` to create
-    a gradient with `new_length` colors. It caches results in the configuration's
-    "extended_color_cache" to avoid redundant calculations.
-
-    Args:
-        original_colors (tuple): A tuple of ANSI escape codes representing colors.
-        new_length (int): The desired number of colors in the extended gradient.
-        config (dict): Configuration dictionary that includes caching information.
-
-    Returns:
-        list: A list of ANSI escape codes representing the extended color gradient.
-    """
-    max_cache_size = 250
-    key = (tuple(original_colors), new_length)
-    cache = config["extended_color_cache"]
-
-    if key in cache:
-        # Mark as recently used
-        cache.move_to_end(key)
-        return cache[key]
-
-    if new_length <= 1:
-        cache[key] = original_colors
-        cache.move_to_end(key)
-        if len(cache) > max_cache_size:
-            cache.popitem(last=False)
-        return original_colors
-
-    extended = []
-    n = len(original_colors)
-    for i in range(new_length):
-        t = i / (new_length - 1)  # relative position in the new color list
-        pos = t * (n - 1)  # find index(float) in original colors that's at the same relative position as in the new one
-        idx = int(pos)
-        # Fractional distance between idx and the next color, used for interpolation (ranges from 0 to 1).
-        # If idx is the last color, set t2 to 1.0 to avoid out-of-bounds errors.
-        t2 = pos - idx if idx < n - 1 else 1.0
-        # find the r, g, b components of the first color with a smaller index
-        rgb1, is_bold1 = parse_ansi_color(original_colors[idx])
-        # find the next color, if we are the end of the list take the last one itself
-        rgb2, is_bold2 = parse_ansi_color(original_colors[min(idx + 1, n - 1)])
-        # find the weighted average between the 2 colors based on the distance from the first one:
-        r = int(round(rgb1[0] * (1 - t2) + rgb2[0] * t2))
-        g = int(round(rgb1[1] * (1 - t2) + rgb2[1] * t2))
-        b = int(round(rgb1[2] * (1 - t2) + rgb2[2] * t2))
-        if is_bold1 and i == 0:
-            extended.append(f"\u001b[1;38;2;{r};{g};{b}m")
-        else:
-            extended.append(f"\u001b[38;2;{r};{g};{b}m")
-
-    cache[key] = extended
-    cache.move_to_end(key)
-    if len(cache) > max_cache_size:
-        cache.popitem(last=False)
-    return extended
-
-
 # ______________________make_sequence______________________
-def make_sequence(config: dict):
+def make_sequence(config: dict[str, Any]) -> dict[str, Any]:
     """
     Create a new falling character sequence for a column.
 
@@ -161,9 +45,9 @@ def make_sequence(config: dict):
     """
     seq_length = random.randint(config["min_sequence_length"], config["max_sequence_length"])
     if random.random() > config['background_chance']:
-        colors = config['colors']
+        colors: tuple[str] = config['colors']
     else:
-        colors = random.choice(tuple(config['background_colors'].keys()))
+        colors: tuple[str] = random.choice(tuple(config['background_colors'].keys()))
     return {'chars': [random.choice(config["characters"]) for _ in range(seq_length)],
             'final_char': 0,
             'speed': random.uniform(config["min_sequence_speed"], config["max_sequence_speed"]),
@@ -172,7 +56,7 @@ def make_sequence(config: dict):
 
 
 # ______________________columns_to_rows______________________
-def columns_to_rows(columns: list, config: dict):
+def columns_to_rows(columns: list[list[dict[str, Any]]], config: dict[str, Any]) -> list[str]:
     """
     Convert column sequences into a list of strings representing terminal rows.
 
@@ -186,9 +70,9 @@ def columns_to_rows(columns: list, config: dict):
     Returns:
         list: A list of strings, each representing a row to be displayed in the terminal.
     """
-    rows = []
+    rows: list[str] = []
     for row_index in range(config["amount_of_rows"]):
-        row = []
+        row: list[str] = []
         for i, column in enumerate(columns):
             if not column:
                 row.append(' ')
@@ -198,7 +82,7 @@ def columns_to_rows(columns: list, config: dict):
                 row.append(' ')
                 continue
 
-            # Find the sequence in the column covering this row based with the highest visibility.
+            # Find the sequence in the column covering this row based on the highest visibility.
             seq_to_display = None
             seq_to_display_brightness = None
             for sequence in column:
@@ -237,20 +121,20 @@ def columns_to_rows(columns: list, config: dict):
                     colors_extended = extend_colors(seq_to_display["colors"], seq_len, config)
                     seq_to_display['colors_extended'] = colors_extended
                 else:
-                    colors_extended = seq_to_display['colors_extended']
+                    colors_extended: tuple[str] = seq_to_display['colors_extended']
 
                 # Map display_index to the gradient.
                 color_index = int((len(colors_extended) - 1) * (display_index / max(seq_len - 1, 1)))
 
                 color = colors_extended[color_index]
-                char = seq_to_display['chars'][display_index]
+                char: str = seq_to_display['chars'][display_index]
                 row.append(f"{color}{char}\u001b[0m")  # \u001b[0m just resets the color (it isn't visible in the rain)
         rows.append(''.join(row))
     return rows
 
 
 # ______________________update_column______________________
-def update_column(column: list, config: dict):
+def update_column(column: list[dict[str, Any]], config: dict[str, Any]) -> list[dict[str, Any]]:
     """
     Update the falling sequences within a single column.
 
@@ -264,7 +148,7 @@ def update_column(column: list, config: dict):
     Returns:
         list: The updated list of sequences for the column.
     """
-    new_column = []
+    new_column: list[dict[str, Any]] = []
     if len(column) == 0:  # if the column is empty, create a new sequence with some probability
         return [make_sequence(config)] if random.random() < config["new_sequence_chance"] else []
 
@@ -273,7 +157,7 @@ def update_column(column: list, config: dict):
         if sequence['final_char'] > (config["amount_of_rows"] + len(sequence['chars'])):
             continue
 
-        new_final_char = sequence['final_char'] + sequence['speed']
+        new_final_char: int = sequence['final_char'] + sequence['speed']
 
         if config["mode"] and int(sequence['final_char'] + 0.5) != int(new_final_char + 0.5):
             # Shift the sequence chars if it moves down this frame. (final_char from 2.3 to 2.4 would not move down)
@@ -305,7 +189,7 @@ def update_column(column: list, config: dict):
 
 
 # ______________________update_columns______________________
-def update_columns(columns: list, config: dict, clear: bool):
+def update_columns(columns: list[list[dict[str, Any]]], config: dict[str, Any], clear: bool) -> tuple[list[list[dict[str, Any]]], bool]:
     """
     Update all columns and adjust the number of columns based on the configuration.
 
@@ -327,11 +211,11 @@ def update_columns(columns: list, config: dict, clear: bool):
         columns = columns[:config["amount_of_columns"]]
         clear = True
     elif len(columns) < config["amount_of_columns"]:
-        columns += [[] for _ in range(config["amount_of_columns"] - len(columns))]
+        columns.extend([[] for _ in range(config["amount_of_columns"] - len(columns))])
         clear = True
 
     if config['space_between_columns']:
-        new_columns = []
+        new_columns: list[list[dict[str, Any]]] = []
         for i, column in enumerate(columns):
             if i % 2 == 1:  # there is no need to update sequences if they aren't visible
                 new_columns.append(column)
@@ -343,7 +227,7 @@ def update_columns(columns: list, config: dict, clear: bool):
 
 
 # ______________________update_sequence_and_background_colors______________________
-def update_sequence_and_background_colors(config: dict, columns: list):
+def update_sequence_and_background_colors(config: dict[str, Any], columns: list[list[dict[str, Any]]]) -> None:
     """
     Update the colors of sequences and background based on the current configuration.
 
@@ -357,13 +241,13 @@ def update_sequence_and_background_colors(config: dict, columns: list):
     Returns:
         None
     """
-    old_background_colors = list(config['background_colors'].keys())
+    old_background_colors: tuple[str] = list(config['background_colors'].keys())
     config['background_colors'] = {}
     make_random = False
 
     # create a background color by reducing all colors' rgb values using reduction_rate
     for reduction_rate in config['background_brightness_reduction']:
-        new_colors = []
+        new_colors: list[str] = []
         for color in config['colors']:
             rgb, is_bold = parse_ansi_color(color)
             r, g, b = [int(value * reduction_rate) for value in rgb]
@@ -393,7 +277,7 @@ def update_sequence_and_background_colors(config: dict, columns: list):
 
 
 # ______________________keys_are_pressed______________________
-def keys_are_pressed(currently_pressed: set, lock, config: dict, keys):
+def keys_are_pressed(currently_pressed: set[str], lock: threading.Lock, config: dict[str, Any], keys) -> bool:
     """
     Check if the specified keys are currently pressed.
 
@@ -422,7 +306,7 @@ def keys_are_pressed(currently_pressed: set, lock, config: dict, keys):
 
 
 # ______________________check_keys______________________
-def check_keys(currently_pressed: set, lock, count: list, columns: list, config: dict, change_controls: callable):
+def check_keys(currently_pressed: set[str], lock: threading.Lock, count: list[float], columns: list[list[dict[str, Any]]], config: dict[str, Any], change_controls: Callable):
     """
     Process keyboard input and update configuration and sequences accordingly.
 
@@ -668,7 +552,7 @@ def check_keys(currently_pressed: set, lock, count: list, columns: list, config:
 
     # first bold:
     if keys_are_pressed(currently_pressed, lock, config, config['controls']['first_bold']):
-        colors = list(config["colors"])
+        colors: list[str] = list(config["colors"])
         parts = colors[0].split('[')
         if parts[1][:2] == '1;':
             pass
@@ -680,7 +564,7 @@ def check_keys(currently_pressed: set, lock, count: list, columns: list, config:
 
     # first white
     if keys_are_pressed(currently_pressed, lock, config, config['controls']['first_white']):
-        colors = list(config["colors"])
+        colors: list[str] = list(config["colors"])
         colors[0] = "\u001b[38;2;255;255;255m"
         config["colors"] = tuple(colors)
         update_colors = True
@@ -688,7 +572,7 @@ def check_keys(currently_pressed: set, lock, count: list, columns: list, config:
     # first bright
     if keys_are_pressed(currently_pressed, lock, config, config['controls']['first_bright']):
         # this doesn't work on custom colors
-        colors = list(config["colors"])
+        colors: list[str] = list(config["colors"])
         first_color, is_bold = parse_ansi_color(colors[1])
         r, g, b = first_color
         if r == 255 and 255 not in (g, b):
@@ -784,7 +668,7 @@ def check_keys(currently_pressed: set, lock, count: list, columns: list, config:
                 print("\nTo create a new list of colors you will enter each colors' RGB values like this: R, G, B.")
                 print('exit/e = leave when you are done creating individual colors')
                 i = 1
-                colors = []
+                colors: list[str] = []
                 make_color = True
                 while True:
                     print(f'\nColor {i}:')
@@ -1129,7 +1013,7 @@ background_colors = {config["background_colors"]}
 
 
 # ______________________clear_if_necessary______________________
-def clear_if_necessary(clear: bool, config: dict, terminal_size=None, old_terminal_size=None):
+def clear_if_necessary(clear: bool, config: dict[str, Any], terminal_size=None, old_terminal_size=None) -> None:
     """
     Clear the terminal screen if conditions indicate that a refresh is needed.
 
@@ -1162,7 +1046,7 @@ def clear_if_necessary(clear: bool, config: dict, terminal_size=None, old_termin
 
 
 # ______________________adjust_size______________________
-def adjust_size(config: dict, terminal_size=None):
+def adjust_size(config: dict[str, Any], terminal_size=None) -> None:
     """
     Adjust the configuration's row and column settings based on the terminal size.
 
@@ -1183,7 +1067,7 @@ def adjust_size(config: dict, terminal_size=None):
 
 
 # ______________________get_config______________________
-def get_config(file_name=CONFIG_FILE, dir_name=CONFIG_DIR_NAME):
+def get_config(file_name=CONFIG_FILE, dir_name=CONFIG_DIR_NAME) -> dict[str, Any]:
     """
     Load the configuration from a JSON file, or return the default configuration if the file is not found.
 
@@ -1241,7 +1125,7 @@ def get_config(file_name=CONFIG_FILE, dir_name=CONFIG_DIR_NAME):
 
             try:
                 with open(file_path, 'r', encoding="utf-8") as file:
-                    config = json.load(file)
+                    config: dict[str, Any] = json.load(file)
                     config["extended_color_cache"] = collections.OrderedDict()
                     config['file_is_valid'] = True
                     config['folder_is_valid'] = folder_is_valid
@@ -1350,7 +1234,7 @@ def get_config(file_name=CONFIG_FILE, dir_name=CONFIG_DIR_NAME):
 
 
 # ______________________save_config______________________
-def save_config(config: dict, update=False, dir_name=None):
+def save_config(config: dict[str, Any], update=False, dir_name=None) -> None:
     """
     Save the current configuration to a JSON file.
 
@@ -1388,8 +1272,8 @@ def save_config(config: dict, update=False, dir_name=None):
     config_dir = os.path.join(script_dir, dir_name)
     os.makedirs(config_dir, exist_ok=True)
 
-    # makes sure not change config when modifying it to save:
-    s_config = {}
+    # makes sure not to change original config when modifying it to save:
+    s_config: dict[str, Any] = {}
     for key in config:
         try:
             s_config[key] = config[key].copy()
@@ -1488,7 +1372,7 @@ def filler_func(*args, **kwargs):
 
 
 # ______________________run_matrix______________________
-def run_matrix(update_pressed_keys=filler_func, change_controls=filler_func, config=None):
+def run_matrix(update_pressed_keys: Callable=filler_func, change_controls: Callable=filler_func, config=None) -> None:
     """
     Run the Matrix rain animation in the terminal.
 
@@ -1508,7 +1392,7 @@ def run_matrix(update_pressed_keys=filler_func, change_controls=filler_func, con
         if config is None:
             config = get_config()  # load config from a file or use default config
 
-        columns = [[] for _ in range(config["amount_of_columns"])]  # initialize columns
+        columns: list[list[dict[str, Any]]] = [[] for _ in range(config["amount_of_columns"])]  # initialize columns
         # intialize count, make sure to update range() when adding new controls that use this
         count = [time.time() for _ in range(15)]
         term_size_debounce = time.time()
@@ -1521,7 +1405,7 @@ def run_matrix(update_pressed_keys=filler_func, change_controls=filler_func, con
         update_colors = True
         hide_or_show_cursor(hide=True)
 
-        currently_pressed = set()
+        currently_pressed: set[str] = set()
         lock = threading.Lock()
         update_pressed_keys(currently_pressed, lock)
 
